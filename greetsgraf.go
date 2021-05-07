@@ -9,23 +9,31 @@ import (
 	"flag"
 	"compress/gzip"
 	"strconv"
+	"time"
 )
 
 type Group struct {
-	PouetId int
+	ID int `gorm:"primaryKey"`
 	Name string
 	Disambiguation string
+	Prods []*Prod `gorm:"many2many:group_prods;"`
 }
 
 type Prod struct {
-	PouetId int
-	GroupId int
+	ID int `gorm:"primaryKey"`
 	Name string
+	Year int
+	Month int
+	Day int
+	Groups []*Group `gorm:"many2many:group_prods;"`
 }
 
-type Relation struct {
-	//gorm.Model
-}
+// type Greet struct {
+// 	gorm.Model
+// 	GreeterID *Group
+// 	GreeteeID *Group
+// 	ProdID *Prod
+// }
 
 func DatabaseOpen(datafile string) (db *gorm.DB, err error) {
 	db, err = gorm.Open(sqlite.Open(datafile), &gorm.Config{})
@@ -62,38 +70,119 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 	}
 
 	db.AutoMigrate(&Group{})
+	db.AutoMigrate(&Prod{})
 
-	groups, err := readJsonGz(groupsfile)
-	if err != nil {
-		log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
-	}
+	log.Printf("Importing groups...")
 
-	tx := db.Begin()
-	defer tx.Commit()
-
-	groups_array := (groups["groups"]).([]interface{})
-	for index, _ := range groups_array {
-		group := (groups_array[index]).(map[string]interface{})
-
-		name := group["name"].(string)
-		disambiguation := group["disambiguation"].(string)
-		pouet_id, err := strconv.ParseInt(group["id"].(string), 10, 64)
-
+	{
+		groups, err := readJsonGz(groupsfile)
 		if err != nil {
-			log.Printf("wtf id %s", group["id"])
-			continue
+			log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
 		}
 
-		dbgroup := Group{
-			PouetId: int(pouet_id),
-			Name: name,
-			Disambiguation: disambiguation,
+		tx := db.Begin()
+
+		groups_array := (groups["groups"]).([]interface{})
+		for index, _ := range groups_array {
+			group := (groups_array[index]).(map[string]interface{})
+
+			name := group["name"].(string)
+			disambiguation := group["disambiguation"].(string)
+			pouet_id, err := strconv.ParseInt(group["id"].(string), 10, 64)
+
+			if err != nil {
+				log.Printf("wtf id %s", group["id"])
+				continue
+			}
+
+			dbgroup := Group{
+				ID: int(pouet_id),
+				Name: name,
+				Disambiguation: disambiguation,
+			}
+
+			tx.Create(&dbgroup)
 		}
 
-		log.Printf("%+v", dbgroup)
-
-		tx.Create(&dbgroup)
+		tx.Commit()
 	}
+
+	log.Printf("Importing prods...")
+
+	{
+		prods, err := readJsonGz(prodsfile)
+		if err != nil {
+			log.Fatalf("Unable to read prods from file %s: %v", groupsfile, err)
+		}
+
+		log.Printf("Loaded prods json into memory...")
+
+		tx := db.Begin()
+
+		prods_array := (prods["prods"]).([]interface{})
+		num_prods := len(prods_array)
+		for i, iprod := range prods_array {
+			prod := iprod.(map[string]interface{})
+			pid, err := strconv.Atoi(prod["id"].(string))
+			if err != nil {
+				log.Printf("wtf id %s", prod["id"])
+				continue
+			}
+
+			name := prod["name"].(string)
+			jdate, found := prod["releaseDate"]
+
+			var date time.Time
+
+			if found && jdate != nil {
+				date_string := jdate.(string)
+				date, err = time.Parse("2006-01-02", date_string)
+				// TODO: for missing/invalid dates try to parse manually, or refer to party_year
+				if err != nil {
+					log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], date_string, err)
+					continue
+				}
+			} else {
+				log.Printf("Prod %v:%v has no date", prod["id"], name)
+			}
+
+			dbprod := Prod{
+				ID: pid,
+				Name: name,
+				Year: date.Year(),
+				Month: int(date.Month()),
+				Day: date.Day(),
+			}
+
+			tx.Create(&dbprod)
+
+			// Associate with groups
+			jgroups := prod["groups"].([]interface{})
+			var groups []Group
+			for _, jgroup := range jgroups {
+				group := jgroup.(map[string]interface{})
+				gid, err := strconv.Atoi(group["id"].(string))
+				if err != nil {
+					log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
+					continue
+				}
+
+				groups = append(groups, Group{ID: gid})
+			}
+
+			if len(groups) > 0 {
+				tx.Model(&dbprod).Association("Groups").Append(groups)
+			}
+
+			if (i + 1) % 1000 == 0 {
+				log.Printf("Processed %d / %d", i + 1, num_prods)
+			}
+		}
+
+		tx.Commit()
+	}
+
+	log.Printf("Import done.")
 }
 
 func listen(db *gorm.DB, listen string) {
