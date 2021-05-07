@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>Greets Graf</title>
+</style>
+<script type="text/javascript">
+	"use strict";
+
+	function debounce(func, cancelFunc, timeout = 200) {
+		let timer;
+		return (...args) => {
+			cancelFunc();
+			clearTimeout(timer);
+			timer = setTimeout(() => { func.apply(this, args); }, timeout);
+		}
+	}
+
+	function sendRequest(path, query, funcDone, funcError) {
+		var req = new XMLHttpRequest();
+		var params = new URLSearchParams(query);
+		req.open("GET", path + "?" + params.toString(), true);
+		req.onreadystatechange = function () {
+			if (req.readyState == XMLHttpRequest.DONE) {
+				var status = req.status;
+				if (status === 0 || (status >= 200 && status < 400)) {
+					if (funcDone)
+						funcDone(req.responseText);
+				} else {
+					if (funcError)
+						funcError(status);
+				}
+			}
+		}
+		req.send();
+		return req;
+	}
+
+	var currentSearch = {}
+
+	function searchCancel() {
+		if (currentSearch.searchXhr)
+			currentSearch.searchXhr.abort();
+		currentSearch = {}
+	}
+
+	function searchRequest() {
+		var name = document.getElementById("prod").value;
+		var element_result = document.getElementById("prods");
+
+		var query = {
+			name: name,
+		};
+
+		currentSearch.searchXhr = sendRequest("/api/search/prod", query,
+			(response) => {
+				var json = response ? JSON.parse(response) : null;
+				var html = `
+<table class="functions">
+<tr><th>id</th><th>name</th></tr>`;
+				if (json) {
+					json.forEach((obj) => {
+							html += "<tr><td>" + obj["ID"] + "</td><td>" + obj["Name"] + "</td></tr>";
+					});
+				}
+				html += "</table>";
+				element_result.innerHTML = html;
+			},
+			() => {
+			}
+		)
+	}
+
+	const searchFormEdited = debounce(() => searchRequest(), () => searchCancel());
+
+	window.onload = function() {
+	}
+</script>
+	</head>
+	<body>
+		<h2>Let's find some greetings</h2>
+		Prod name: <input type="text" id="prod" onchange="searchFormEdited()" onkeyup="searchFormEdited()"/><br/>
+		<div id="prods"></div>
+	</body>
+</html>

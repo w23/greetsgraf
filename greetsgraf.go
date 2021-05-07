@@ -3,13 +3,14 @@ package main
 import (
 	"os"
 	"log"
-  "gorm.io/gorm"
-  "gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/driver/sqlite"
 	"encoding/json"
 	"flag"
 	"compress/gzip"
 	"strconv"
 	"time"
+	"net/http"
 )
 
 type Group struct {
@@ -185,7 +186,71 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 	log.Printf("Import done.")
 }
 
+func respondErrJson(w http.ResponseWriter, status int, err error) {
+	response, jerr := json.Marshal(struct{Error string}{Error: err.Error()})
+	if jerr != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write([]byte(response))
+}
+
+func respondJson(w http.ResponseWriter, status int, payload interface{}) {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		respondErrJson(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write([]byte(response))
+}
+
+type Context struct {
+	db *gorm.DB
+}
+
+func (c *Context) findGroup(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	name := query.Get("name")
+	if name == "" {
+		respondJson(w, http.StatusOK, []int{})
+		return
+	}
+
+	var groups []Group
+	c.db.Where("name LIKE ?", "%"+name+"%").Limit(10).Find(&groups)
+	respondJson(w, http.StatusOK, &groups)
+}
+
+func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	name := query.Get("name")
+	if name == "" {
+		respondJson(w, http.StatusOK, []int{})
+		return
+	}
+
+	db := c.db.Where("name LIKE ?", "%"+name+"%")
+
+	var prods []Prod
+	db.Limit(10).Find(&prods)
+	respondJson(w, http.StatusOK, &prods)
+}
+
 func listen(db *gorm.DB, listen string) {
+	ctx := Context{db}
+
+	http.HandleFunc("/", func (w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "index.html") })
+	http.HandleFunc("/api/search/group/", ctx.findGroup)
+	http.HandleFunc("/api/search/prod/", ctx.findProd)
+
+	log.Fatal(http.ListenAndServe(listen, nil))
 }
 
 type Args struct {
