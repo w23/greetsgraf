@@ -16,23 +16,33 @@
 		}
 	}
 
-	function sendRequest(path, query, funcDone, funcError) {
+	function sendRequest(method, path, query, body, funcDone, funcError) {
 		var req = new XMLHttpRequest();
-		var params = new URLSearchParams(query);
-		req.open("GET", path + "?" + params.toString(), true);
+		if (query) {
+			var params = new URLSearchParams(query);
+			path = path + "?" + params.toString();
+		}
+		req.open(method, path, true);
 		req.onreadystatechange = function () {
 			if (req.readyState == XMLHttpRequest.DONE) {
 				var status = req.status;
 				if (status === 0 || (status >= 200 && status < 400)) {
 					if (funcDone)
-						funcDone(req.responseText);
+						funcDone(req.responseText, status);
 				} else {
 					if (funcError)
-						funcError(status);
+						funcError(req.responseText, status);
 				}
 			}
 		}
-		req.send();
+
+		if (body) {
+			req.setRequestHeader("Content-Type", "application/json");
+			req.send(JSON.stringify(body));
+		} else {
+			req.send();
+		}
+
 		return req;
 	}
 
@@ -45,14 +55,14 @@
 	}
 
 	function searchRequest() {
-		var name = document.getElementById("prod").value;
+		var name = document.getElementById("in_prod").value;
 		var element_result = document.getElementById("prods");
 
 		var query = {
 			name: name,
 		};
 
-		currentSearch.searchXhr = sendRequest("/api/search/prod", query,
+		currentSearch.searchXhr = sendRequest("GET", "/v1/prods/search", query, null,
 			(response) => {
 				var json = response ? JSON.parse(response) : null;
 				var html = `
@@ -73,13 +83,43 @@
 
 	const searchFormEdited = debounce(() => searchRequest(), () => searchCancel());
 
+	function loadProd() {
+		var pid = parseInt(document.getElementById("in_prod_id").value);
+		if (isNaN(pid)) {
+			return;
+		}
+
+		var xhr = sendRequest("GET", "/v1/prods/" + pid, null, null,
+			(response) => {
+				document.getElementById("prod").innerHTML = response;
+			},
+			(response) => {
+				document.getElementById("prod").innerHTML = "ERROR:" + response;
+			}
+		)
+
+			/*
+		var gxhr = sendRequest("GET", "/v1/greets/search", {prod:pid}, null,
+			(response) => {
+				document.getElementById("greets").innerHTML = response;
+			},
+			(response) => {
+				document.getElementById("greets").innerHTML = "ERROR:" + response;
+			}
+		)
+			*/
+	}
+
 	window.onload = function() {
 	}
 </script>
 	</head>
 	<body>
 		<h2>Let's find some greetings</h2>
-		Prod name: <input type="text" id="prod" onchange="searchFormEdited()" onkeyup="searchFormEdited()"/><br/>
+		Prod name: <input type="text" id="in_prod" onchange="searchFormEdited()" onkeyup="searchFormEdited()"/><br/>
 		<div id="prods"></div>
+		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
+		<div id="prod"></div>
+		<div id="greets"></div>
 	</body>
 </html>

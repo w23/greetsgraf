@@ -11,30 +11,32 @@ import (
 	"strconv"
 	"time"
 	"net/http"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type Group struct {
-	ID int `gorm:"primaryKey"`
+	ID uint `gorm:"primaryKey"`
 	Name string
 	Disambiguation string
-	Prods []*Prod `gorm:"many2many:group_prods;"`
+	Prods []Prod `gorm:"many2many:group_prods;"`
 }
 
 type Prod struct {
-	ID int `gorm:"primaryKey"`
+	ID uint `gorm:"primaryKey"`
+	//gorm.Model
 	Name string
 	Year int
 	Month int
 	Day int
-	Groups []*Group `gorm:"many2many:group_prods;"`
+	Groups []Group `gorm:"many2many:group_prods;"`
 }
 
-// type Greet struct {
-// 	gorm.Model
-// 	GreeterID *Group
-// 	GreeteeID *Group
-// 	ProdID *Prod
-// }
+type Greet struct {
+	ID uint `gorm:"primaryKey"`
+	ProdID uint `gorm:"uniqueIndex:greets_prod_group"`
+	GreeteeID uint `gorm:"uniqueIndex:greets_prod_group"`
+}
 
 func DatabaseOpen(datafile string) (db *gorm.DB, err error) {
 	db, err = gorm.Open(sqlite.Open(datafile), &gorm.Config{})
@@ -72,6 +74,7 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 
 	db.AutoMigrate(&Group{})
 	db.AutoMigrate(&Prod{})
+	db.AutoMigrate(&Greet{})
 
 	log.Printf("Importing groups...")
 
@@ -97,7 +100,7 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 			}
 
 			dbgroup := Group{
-				ID: int(pouet_id),
+				ID: uint(pouet_id),
 				Name: name,
 				Disambiguation: disambiguation,
 			}
@@ -148,18 +151,15 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 			}
 
 			dbprod := Prod{
-				ID: pid,
+				ID: uint(pid),
 				Name: name,
 				Year: date.Year(),
 				Month: int(date.Month()),
 				Day: date.Day(),
 			}
 
-			tx.Create(&dbprod)
-
 			// Associate with groups
 			jgroups := prod["groups"].([]interface{})
-			var groups []Group
 			for _, jgroup := range jgroups {
 				group := jgroup.(map[string]interface{})
 				gid, err := strconv.Atoi(group["id"].(string))
@@ -168,12 +168,14 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 					continue
 				}
 
-				groups = append(groups, Group{ID: gid})
+				dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
 			}
 
-			if len(groups) > 0 {
-				tx.Model(&dbprod).Association("Groups").Append(groups)
-			}
+			tx.Create(&dbprod)
+
+			// if len(groups) > 0 {
+			// 	tx.Model(&dbprod).Association("Groups").Append(groups)
+			// }
 
 			if (i + 1) % 1000 == 0 {
 				log.Printf("Processed %d / %d", i + 1, num_prods)
@@ -239,18 +241,119 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 	db := c.db.Where("name LIKE ?", "%"+name+"%")
 
 	var prods []Prod
-	db.Limit(10).Find(&prods)
-	respondJson(w, http.StatusOK, &prods)
+	db = db.Limit(10).Find(&prods)
+	//log.Printf("Err: %+v, Rows: %+v, Prod:%+v", db.Error, db.RowsAffected, prods)
+	if db.Error == gorm.ErrRecordNotFound {
+		log.Printf("NOT FOUND")
+		respondJson(w, http.StatusNotFound, struct{}{})
+	} else if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	} else {
+		respondJson(w, http.StatusOK, prods)
+	}
+}
+
+func (c *Context) prodGet(w http.ResponseWriter, r *http.Request) {
+	pid, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		respondErrJson(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var prod Prod
+	db := c.db.Find(&prod, "id = ?", pid)
+	//log.Printf("Err: %+v, Rows: %+v, Prod:%+v", db.Error, db.RowsAffected, prod)
+	if db.Error == gorm.ErrRecordNotFound {
+		log.Printf("NOT FOUND")
+		respondJson(w, http.StatusNotFound, struct{}{})
+	} else if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	} else {
+		c.db.Model(&prod).Association("Groups").Find(&prod.Groups)
+		log.Printf("%+v", prod.Groups)
+		respondJson(w, http.StatusOK, prod)
+	}
+}
+
+func (c *Context) greetsSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	db := c.db
+	prod_id, err := strconv.Atoi(query.Get("prod"))
+	if err == nil {
+		db = db.Where("prod_id = ?", prod_id)
+	}
+
+	group_id, err := strconv.Atoi(query.Get("group"))
+	if err == nil {
+		db = db.Where("group_id = ?", group_id)
+	}
+	
+	var greets []Greet
+	db = db.Find(&greets)
+	log.Printf("%+v", greets)
+	err = db.Error
+	if err != nil {
+		log.Printf("Error: %+v", err)
+		respondErrJson(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJson(w, http.StatusOK, greets)
+}
+
+func (c *Context) greetsCreate(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ProdId int
+		GroupId int
+		Reference string
+	}
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil {
+		respondErrJson(w, http.StatusBadRequest, err)
+		return
+	}
+
+	db := c.db.Create(&Greet{
+		ProdID: uint(body.ProdId),
+		GreeteeID: uint(body.GroupId),
+	})
+
+	if db.Error != nil {
+		log.Printf("Error adding greet %+v: %+v", body, db.Error)
+	}
+
+	log.Printf("Adding greet %+v, rows affected: %d", body, db.RowsAffected)
+	respondJson(w, http.StatusOK, struct{Rows int64}{db.RowsAffected})
 }
 
 func listen(db *gorm.DB, listen string) {
 	ctx := Context{db}
 
-	http.HandleFunc("/", func (w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "index.html") })
-	http.HandleFunc("/api/search/group/", ctx.findGroup)
-	http.HandleFunc("/api/search/prod/", ctx.findProd)
+	r := chi.NewRouter()
 
-	log.Fatal(http.ListenAndServe(listen, nil))
+	r.Use(middleware.Logger)
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	r.Get("/v1/groups/search", ctx.findGroup)
+	r.Route("/v1/prods", func (r chi.Router) {
+		r.Get("/search", ctx.findProd)
+		r.Get("/{id}", ctx.prodGet)
+	})
+
+	r.Route("/v1/greets", func (r chi.Router) {
+		r.Get("/search", ctx.greetsSearch)
+		r.Post("/", ctx.greetsCreate)
+
+		r.Route("/{id}", func (r chi.Router) {
+			//r.Get("/{id}", ctx.greetsGet)
+			//r.Patch("/{id}", ctx.greetsUpdate)
+			//r.Delete("/{id}", ctx.greetsDelete)
+		})
+	})
+
+	r.Get("/", func (w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "index.html") })
+
+	log.Fatal(http.ListenAndServe(listen, r))
 }
 
 type Args struct {
