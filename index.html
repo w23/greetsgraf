@@ -92,11 +92,26 @@
 		elem = document.createElement(obj.name);
 	}
 
+	function greetDelete(id) {
+		if (!id) return;
+
+		var xhr = sendRequest("DELETE", "/v1/greets/" + id, null, null,
+			(response, status) => {
+				console.log(status, response);
+				loadProd();
+			},
+			(response, status) => {
+				console.log(status, response)
+				document.getElementById("greets_list").innerHTML = "ERROR:" + response;
+			}
+		)
+	}
+
 	Greet.prototype.makeHtml = function() {
 		var html = "<tr>";
 		html += '<td>Group: <input type="text" id="greet_' + this.index + '_group" value="' + this.data.GreeteeID + '"> ';
 			html += 'Reference: <input type="text" id="greet_' + this.index + '_reference" value="' + this.data.Reference + '"></td>';
-			html += '<td><button>Save</button> <button>Delete</button></td>';
+			html += '<td><button>Save</button> <button onclick="greetDelete('+this.data.ID+')">Delete</button></td>';
 		html += "</tr>";
 		return html;
 	};

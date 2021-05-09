@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"strings"
 )
 
 type Group struct {
@@ -30,7 +31,13 @@ type Prod struct {
 	Year int `gorm:"index"`
 	Month int `gorm:"index"`
 	Day int `gorm:"index"`
-	// TODO: video, voteup, votepig, votedown, rank, demozoo, credits
+	Video string
+	Rank int
+	VoteUp int
+	VotePig int
+	VoteDown int
+	Demozoo int
+	// TODO: credits
 	Groups []Group `gorm:"many2many:group_prods;"`
 	Greets []Greet
 }
@@ -70,6 +77,10 @@ func readJsonGz(filename string) (map[string]interface{}, error) {
 	}
 
 	return value, err
+}
+
+func ContainsInsensitive(a, b string) bool {
+	return strings.Contains(strings.ToLower(a), strings.ToLower(b))
 }
 
 func create(db *gorm.DB, prodsfile string, groupsfile string) {
@@ -127,10 +138,10 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 
 		log.Printf("Loaded prods json into memory...")
 
-		tx := db.Begin()
-
 		prods_array := (prods["prods"]).([]interface{})
 		num_prods := len(prods_array)
+
+		tx := db.Begin()
 		for i, iprod := range prods_array {
 			prod := iprod.(map[string]interface{})
 			pid, err := strconv.Atoi(prod["id"].(string))
@@ -156,12 +167,45 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 				log.Printf("Prod %v:%v has no date", prod["id"], name)
 			}
 
+			rank, _ := strconv.Atoi(prod["rank"].(string))
+			voteup, _ := strconv.Atoi(prod["voteup"].(string))
+			votepig, _ := strconv.Atoi(prod["votepig"].(string))
+			votedown, _ := strconv.Atoi(prod["votedown"].(string))
+
+			var demozoo int
+			if json_demozoo, have_demozoo := prod["demozoo"]; have_demozoo && json_demozoo != nil {
+				demozoo, _ = strconv.Atoi(json_demozoo.(string))
+			}
+
+			var video string
+			if dlinks, have := prod["downloadLinks"]; have {
+				array := dlinks.([]interface{})
+				for _, jlink := range array {
+					link := jlink.(map[string]interface{})
+					ltype := strings.ToLower(link["type"].(string))
+					if strings.Contains(ltype, "youtube") {
+						video = link["link"].(string)
+						break
+					}
+					if strings.Contains(ltype, "vimeo") {
+						video = link["link"].(string)
+						break
+					}
+				}
+			}
+
 			dbprod := Prod{
 				ID: uint(pid),
 				Name: name,
 				Year: date.Year(),
 				Month: int(date.Month()),
 				Day: date.Day(),
+				Rank: rank,
+				VoteUp: voteup,
+				VoteDown: votedown,
+				VotePig: votepig,
+				Demozoo: demozoo,
+				Video: video,
 			}
 
 			// Associate with groups
@@ -245,7 +289,6 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 	var prods []Prod
 	db = db.Limit(10).Find(&prods)
 	if db.Error == gorm.ErrRecordNotFound {
-		log.Printf("NOT FOUND")
 		respondJson(w, http.StatusNotFound, struct{}{})
 	} else if db.Error != nil {
 		respondErrJson(w, http.StatusInternalServerError, db.Error)
@@ -264,7 +307,6 @@ func (c *Context) prodGet(w http.ResponseWriter, r *http.Request) {
 	var prod Prod
 	db := c.db.Find(&prod, "id = ?", pid)
 	if db.Error == gorm.ErrRecordNotFound {
-		log.Printf("NOT FOUND")
 		respondJson(w, http.StatusNotFound, struct{}{})
 	} else if db.Error != nil {
 		respondErrJson(w, http.StatusInternalServerError, db.Error)
@@ -349,6 +391,23 @@ func (c *Context) greetsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (c *Context) greetsDelete(w http.ResponseWriter, r *http.Request) {
+	greet_id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		respondErrJson(w, http.StatusBadRequest, err)
+		return
+	}
+
+	db := c.db.Unscoped().Delete(&Greet{}, "id = ?", greet_id)
+	if db.Error == gorm.ErrRecordNotFound {
+		respondJson(w, http.StatusNotFound, struct{}{})
+	} else if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	} else {
+		respondJson(w, http.StatusOK, struct{Rows int64}{db.RowsAffected})
+	}
+}
+
 func listen(db *gorm.DB, listen string) {
 	ctx := Context{db}
 
@@ -383,9 +442,9 @@ func listen(db *gorm.DB, listen string) {
 		r.Post("/", ctx.greetsCreate)
 
 		r.Route("/{id}", func (r chi.Router) {
-			//r.Get("/{id}", ctx.greetsGet)
-			//r.Patch("/{id}", ctx.greetsUpdate)
-			//r.Delete("/{id}", ctx.greetsDelete)
+			//r.Get("", ctx.greetsGet)
+			//r.Patch("", ctx.greetsUpdate)
+			r.Delete("/", ctx.greetsDelete)
 		})
 	})
 
