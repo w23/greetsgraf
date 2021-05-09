@@ -17,15 +17,15 @@
 	}
 
 	function sendRequest(method, path, query, body, funcDone, funcError) {
-		var req = new XMLHttpRequest();
+		let req = new XMLHttpRequest();
 		if (query) {
-			var params = new URLSearchParams(query);
+			let params = new URLSearchParams(query);
 			path = path + "?" + params.toString();
 		}
 		req.open(method, path, true);
 		req.onreadystatechange = function () {
 			if (req.readyState == XMLHttpRequest.DONE) {
-				var status = req.status;
+				let status = req.status;
 				if (status === 0 || (status >= 200 && status < 400)) {
 					if (funcDone)
 						funcDone(req.responseText, status);
@@ -46,7 +46,7 @@
 		return req;
 	}
 
-	var currentSearch = {}
+	let currentSearch = {}
 
 	function searchCancel() {
 		if (currentSearch.searchXhr)
@@ -55,17 +55,17 @@
 	}
 
 	function searchRequest() {
-		var name = document.getElementById("in_prod").value;
-		var element_result = document.getElementById("prods");
+		let name = document.getElementById("in_prod").value;
+		let element_result = document.getElementById("prods");
 
-		var query = {
+		let query = {
 			name: name,
 		};
 
 		currentSearch.searchXhr = sendRequest("GET", "/v1/prods/search", query, null,
 			(response) => {
-				var json = response ? JSON.parse(response) : null;
-				var html = `
+				let json = response ? JSON.parse(response) : null;
+				let html = `
 <table class="functions">
 <tr><th>id</th><th>name</th></tr>`;
 				if (json) {
@@ -83,26 +83,57 @@
 
 	const searchFormEdited = debounce(() => searchRequest(), () => searchCancel());
 
+	function Tag(name, attrs, body, children) {
+		let elem = document.createElement(name);
+		if (body) {
+			elem.innerHTML = body;
+		}
+		for (let k in attrs) {
+			elem[k] = attrs[k];
+		}
+		for (let i in children) {
+			elem.appendChild(children[i]);
+		}
+		return elem;
+	}
+
+	function Text(text) {
+		return document.createTextNode(text);
+	}
+
 	function Greet(index, data) {
 		this.index = index;
 		this.data = data ? data : {};
 	}
 
-	function Tag(name, body, attrs) {
-		var elem = document.createElement(name);
-		if (body) {
-			elem.innerHTML = body;
-		}
-		for (var k in attrs) {
-			elem[k] = attrs[k];
-		}
-		return elem;
-	}
+	Greet.prototype.createRow = function() {
+		let tag_input_group =  Tag('input', {
+			type: "text",
+			value: this.data.GreeteeID
+		});
+		let tag_input_note = Tag('input', {
+			type: "text",
+			value: this.data.Reference
+		});
+		let tag_button_delete = Tag('button', {
+			onclick: () => {
+				if (confirm("Are you sure you want to delete this greet?")) { // TODO show greet info
+					this.delete();
+				}
+			}
+		}, "Delete");
 
-	function greetDelete(id) {
-		if (!id) return;
+		return Tag('tr', {class: "greet"}, null, [
+			Tag('td', null, null, [
+					Text("Group: "), tag_input_group,
+					Text(" Note: "), tag_input_note,
+					Text(" "), tag_button_delete
+			])
+		]);
+	};
 
-		var xhr = sendRequest("DELETE", "/v1/greets/" + id, null, null,
+	Greet.prototype.delete = function() {
+		let xhr = sendRequest("DELETE", "/v1/greets/" + this.data.ID, null, null,
 			(response, status) => {
 				console.log(status, response);
 				loadProd();
@@ -114,33 +145,27 @@
 		)
 	}
 
-	Greet.prototype.makeHtml = function() {
-		var html = "<tr>";
-		html += '<td>Group: <input type="text" id="greet_' + this.index + '_group" value="' + this.data.GreeteeID + '"> ';
-			html += 'Reference: <input type="text" id="greet_' + this.index + '_reference" value="' + this.data.Reference + '"></td>';
-			html += '<td><button>Save</button> <button onclick="greetDelete('+this.data.ID+')">Delete</button></td>';
-		html += "</tr>";
-		return html;
-	};
-
 	function loadProd() {
-		var pid = parseInt(document.getElementById("in_prod_id").value);
+		let pid = parseInt(document.getElementById("in_prod_id").value);
 		if (isNaN(pid)) {
 			return;
 		}
 
-		var prod_container = document.getElementById("prod_container");
+		let prod_container = document.getElementById("prod_container");
 		prod_container.style.display = "none";
-		var prod = document.getElementById("prod");
+		let prod = document.getElementById("prod");
 		prod.innerHTML = "";
 
-		var xhr = sendRequest("GET", "/v1/prods/" + pid, null, null,
-			(response) => {
-				var json = JSON.parse(response);
+		let greets_list = document.getElementById("greets_list");
+		greets_list.innerHTML = "";
 
-				var html = "<strong>" + json.Name + "</strong> by ";
-				for (var gi in json.Groups) {
-					var g = json.Groups[gi];
+		let xhr = sendRequest("GET", "/v1/prods/" + pid, null, null,
+			(response) => {
+				let json = JSON.parse(response);
+
+				let html = "<strong>" + json.Name + "</strong> by ";
+				for (let gi in json.Groups) {
+					let g = json.Groups[gi];
 					if (gi > 0) {
 						html += " and ";
 					}
@@ -148,19 +173,21 @@
 				}
 				html += " <br />";
 				prod.innerHTML = html;
-				prod.appendChild(Tag('a', '[pouet.net]', {href: "https://www.pouet.net/prod.php?which=" + json.ID}));
-				prod.appendChild(Tag('a', '[demozoo]', {href: "https://demozoo.org/productions/" + json.Demozoo}));
+				prod.appendChild(Tag('a', {href: "https://www.pouet.net/prod.php?which=" + json.ID}, '[pouet.net]'));
+				prod.appendChild(Text(" "));
+				prod.appendChild(Tag('a', {href: "https://demozoo.org/productions/" + json.Demozoo}, '[demozoo]'));
+				prod.appendChild(Text(" "));
+				prod.appendChild(Tag('a', {href: "https://www.pouet.net/prod_nfo.php?which=" + json.ID}, '[nfo]'));
 
 				if (json.Video) {
-					prod.appendChild(Tag('a', '[video]', {href: json.Video}));
+					prod.appendChild(Text(" "));
+					prod.appendChild(Tag('a', {href: json.Video}, '[video]'));
 				}
 
-				var html_greets = "<table>";
-				for (var i in json.Greets) {
-					var greet = new Greet(i, json.Greets[i]);
-					html_greets += greet.makeHtml();
+				for (let i in json.Greets) {
+					let greet = new Greet(i, json.Greets[i]);
+					greets_list.appendChild(greet.createRow());
 				}
-				document.getElementById("greets_list").innerHTML = html_greets + "</table>";
 
 				prod_container.style.display = "block";
 			},
@@ -169,27 +196,26 @@
 			}
 		)
 	}
-
 	function greetAdd() {
-		var pid = parseInt(document.getElementById("in_prod_id").value);
+		let pid = parseInt(document.getElementById("in_prod_id").value);
 		if (isNaN(pid)) {
 			return;
 		}
 
-		var gid = parseInt(document.getElementById("greet_add_group_id").value);
+		let gid = parseInt(document.getElementById("greet_add_group_id").value);
 		if (isNaN(gid)) {
 			return;
 		}
 
-		var reference = document.getElementById("greed_add_reference").value;
+		let reference = document.getElementById("greed_add_reference").value;
 
-		var body = {
+		let body = {
 			ProdId: pid,
 			GroupId: gid,
 			Reference: reference
 		};
 
-		var xhr = sendRequest("POST", "/v1/greets/", null, body,
+		let xhr = sendRequest("POST", "/v1/greets/", null, body,
 			(response, status) => {
 				console.log(status, response);
 				loadProd();
@@ -201,7 +227,14 @@
 		)
 	}
 
+	function $(name) { return document.getElementById(name); }
+
 	window.onload = function() {
+		$("in_prod_id").onkeyup = (e) => {
+			if (e.key === "Enter" || e.keyCode === 13) {
+				loadProd();
+			}
+		};
 	}
 </script>
 	</head>
