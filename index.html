@@ -89,7 +89,14 @@
 	}
 
 	function Tag(name, body, attrs) {
-		elem = document.createElement(obj.name);
+		var elem = document.createElement(name);
+		if (body) {
+			elem.innerHTML = body;
+		}
+		for (var k in attrs) {
+			elem[k] = attrs[k];
+		}
+		return elem;
 	}
 
 	function greetDelete(id) {
@@ -122,16 +129,40 @@
 			return;
 		}
 
+		var prod_container = document.getElementById("prod_container");
+		prod_container.style.display = "none";
+		var prod = document.getElementById("prod");
+		prod.innerHTML = "";
+
 		var xhr = sendRequest("GET", "/v1/prods/" + pid, null, null,
 			(response) => {
 				var json = JSON.parse(response);
-					var html_greets = "<table>";
+
+				var html = "<strong>" + json.Name + "</strong> by ";
+				for (var gi in json.Groups) {
+					var g = json.Groups[gi];
+					if (gi > 0) {
+						html += " and ";
+					}
+					html += '<a href="https://www.pouet.net/groups.php?which=' + g.ID + '">' + g.Name + '</a>';
+				}
+				html += " <br />";
+				prod.innerHTML = html;
+				prod.appendChild(Tag('a', '[pouet.net]', {href: "https://www.pouet.net/prod.php?which=" + json.ID}));
+				prod.appendChild(Tag('a', '[demozoo]', {href: "https://demozoo.org/productions/" + json.Demozoo}));
+
+				if (json.Video) {
+					prod.appendChild(Tag('a', '[video]', {href: json.Video}));
+				}
+
+				var html_greets = "<table>";
 				for (var i in json.Greets) {
 					var greet = new Greet(i, json.Greets[i]);
 					html_greets += greet.makeHtml();
 				}
-				document.getElementById("prod").innerHTML = response;
-					document.getElementById("greets_list").innerHTML = html_greets + "</table>";
+				document.getElementById("greets_list").innerHTML = html_greets + "</table>";
+
+				prod_container.style.display = "block";
 			},
 			(response) => {
 				document.getElementById("prod").innerHTML = "ERROR:" + response;
@@ -179,10 +210,12 @@
 		Prod name: <input type="text" id="in_prod" onchange="searchFormEdited()" onkeyup="searchFormEdited()"/><br/>
 		<div id="prods"></div>
 		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
-		<div id="prod"></div>
-		<div id="greets">
+
+		<div id="prod_container" style="display: none;">
+			<div id="prod"></div>
+			<strong>Greetings:</strong><br/>
 			<div id="greets_list"></div>
-			GroupID: <input type="text" id="greet_add_group_id"> Reference:<input type="text" id="greed_add_reference"> <button onclick="greetAdd()">add</button>
+			Add new: GroupID: <input type="text" id="greet_add_group_id"> Note:<input type="text" placeholder="e.g. 1m37s or nfo" id="greed_add_reference"> <button onclick="greetAdd()">add</button>
 		</div>
 	</body>
 </html>
