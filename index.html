@@ -83,6 +83,24 @@
 
 	const searchFormEdited = debounce(() => searchRequest(), () => searchCancel());
 
+	function Greet(index, data) {
+		this.index = index;
+		this.data = data ? data : {};
+	}
+
+	function Tag(name, body, attrs) {
+		elem = document.createElement(obj.name);
+	}
+
+	Greet.prototype.makeHtml = function() {
+		var html = "<tr>";
+		html += '<td>Group: <input type="text" id="greet_' + this.index + '_group" value="' + this.data.GreeteeID + '"> ';
+			html += 'Reference: <input type="text" id="greet_' + this.index + '_reference" value="' + this.data.Reference + '"></td>';
+			html += '<td><button>Save</button> <button>Delete</button></td>';
+		html += "</tr>";
+		return html;
+	};
+
 	function loadProd() {
 		var pid = parseInt(document.getElementById("in_prod_id").value);
 		if (isNaN(pid)) {
@@ -91,23 +109,50 @@
 
 		var xhr = sendRequest("GET", "/v1/prods/" + pid, null, null,
 			(response) => {
+				var json = JSON.parse(response);
+					var html_greets = "<table>";
+				for (var i in json.Greets) {
+					var greet = new Greet(i, json.Greets[i]);
+					html_greets += greet.makeHtml();
+				}
 				document.getElementById("prod").innerHTML = response;
+					document.getElementById("greets_list").innerHTML = html_greets + "</table>";
 			},
 			(response) => {
 				document.getElementById("prod").innerHTML = "ERROR:" + response;
 			}
 		)
+	}
 
-			/*
-		var gxhr = sendRequest("GET", "/v1/greets/search", {prod:pid}, null,
-			(response) => {
-				document.getElementById("greets").innerHTML = response;
+	function greetAdd() {
+		var pid = parseInt(document.getElementById("in_prod_id").value);
+		if (isNaN(pid)) {
+			return;
+		}
+
+		var gid = parseInt(document.getElementById("greet_add_group_id").value);
+		if (isNaN(gid)) {
+			return;
+		}
+
+		var reference = document.getElementById("greed_add_reference").value;
+
+		var body = {
+			ProdId: pid,
+			GroupId: gid,
+			Reference: reference
+		};
+
+		var xhr = sendRequest("POST", "/v1/greets/", null, body,
+			(response, status) => {
+				console.log(status, response);
+				loadProd();
 			},
-			(response) => {
-				document.getElementById("greets").innerHTML = "ERROR:" + response;
+			(response, status) => {
+				console.log(status, response)
+				document.getElementById("greets_list").innerHTML = "ERROR:" + response;
 			}
 		)
-			*/
 	}
 
 	window.onload = function() {
@@ -115,11 +160,14 @@
 </script>
 	</head>
 	<body>
-		<h2>Let's find some greetings</h2>
+		<h2>Let's fill some greetings</h2>
 		Prod name: <input type="text" id="in_prod" onchange="searchFormEdited()" onkeyup="searchFormEdited()"/><br/>
 		<div id="prods"></div>
 		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
 		<div id="prod"></div>
-		<div id="greets"></div>
+		<div id="greets">
+			<div id="greets_list"></div>
+			GroupID: <input type="text" id="greet_add_group_id"> Reference:<input type="text" id="greed_add_reference"> <button onclick="greetAdd()">add</button>
+		</div>
 	</body>
 </html>
