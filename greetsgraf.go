@@ -37,6 +37,7 @@ type Prod struct {
 	VotePig int
 	VoteDown int
 	Demozoo int
+	Screenshot string
 	// TODO: credits
 	Groups []Group `gorm:"many2many:group_prods;"`
 	Greets []Greet
@@ -194,6 +195,11 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 				}
 			}
 
+			var screenshot string
+			if shot, found := prod["screenshot"]; found && shot != nil {
+				screenshot = shot.(string)
+			}
+
 			dbprod := Prod{
 				ID: uint(pid),
 				Name: name,
@@ -206,6 +212,7 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 				VotePig: votepig,
 				Demozoo: demozoo,
 				Video: video,
+				Screenshot: screenshot,
 			}
 
 			// Associate with groups
@@ -287,7 +294,7 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 	db := c.db.Where("name LIKE ?", "%"+name+"%")
 
 	var prods []Prod
-	db = db.Limit(10).Find(&prods)
+	db = db.Preload("Groups").Limit(10).Find(&prods)
 	if db.Error == gorm.ErrRecordNotFound {
 		respondJson(w, http.StatusNotFound, struct{}{})
 	} else if db.Error != nil {

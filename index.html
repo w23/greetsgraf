@@ -7,6 +7,26 @@
 <script type="text/javascript">
 	"use strict";
 
+	function $(name) { return document.getElementById(name); }
+
+	function Tag(name, attrs, body, children) {
+		let elem = document.createElement(name);
+		if (body) {
+			elem.innerHTML = body;
+		}
+		for (let k in attrs) {
+			elem[k] = attrs[k];
+		}
+		for (let i in children) {
+			elem.appendChild(children[i]);
+		}
+		return elem;
+	}
+
+	function Text(text) {
+		return document.createTextNode(text);
+	}
+
 	function debounce(func, cancelFunc, timeout = 200) {
 		let timer;
 		return (...args) => {
@@ -46,6 +66,9 @@
 		return req;
 	}
 
+
+
+
 	let currentSearch = {}
 
 	function searchCancel() {
@@ -54,8 +77,9 @@
 		currentSearch = {}
 	}
 
-	function searchRequest() {
-		let name = document.getElementById("in_prod").value;
+	function searchRequest(value, prod_list) {
+		console.log("Search request: ", value);
+		let name = value;
 		let element_result = document.getElementById("prods");
 
 		let query = {
@@ -64,12 +88,19 @@
 
 		currentSearch.searchXhr = sendRequest("GET", "/v1/prods/search", query, null,
 			(response) => {
+				console.log("Received reply for: ", value, ": ", response);
 				let json = response ? JSON.parse(response) : null;
+
 				let html = `
 <table class="functions">
 <tr><th>id</th><th>name</th></tr>`;
 				if (json) {
 					json.forEach((obj) => {
+						prod_list.appendChild(Tag(
+							"option", {value: obj.ID}, null, [
+									Text(obj.Name + (obj.Disambiguation ? " (" + obj.Disambiguation + ")" : "")),
+									Text(" by "),
+									(obj.Groups && obj.Groups.length > 0) ? Tag("strong", null, obj.Groups[0].Name) : Text("N/A")]));
 							html += "<tr><td>" + obj["ID"] + "</td><td>" + obj["Name"] + "</td></tr>";
 					});
 				}
@@ -81,24 +112,11 @@
 		)
 	}
 
-	const searchFormEdited = debounce(() => searchRequest(), () => searchCancel());
+	const searchFormEdited = (value) => {
+		let prod_list = $('prod_matches');
+		prod_list.innerHTML = "";
 
-	function Tag(name, attrs, body, children) {
-		let elem = document.createElement(name);
-		if (body) {
-			elem.innerHTML = body;
-		}
-		for (let k in attrs) {
-			elem[k] = attrs[k];
-		}
-		for (let i in children) {
-			elem.appendChild(children[i]);
-		}
-		return elem;
-	}
-
-	function Text(text) {
-		return document.createTextNode(text);
+		debounce(() => searchRequest(value, prod_list), () => searchCancel())();
 	}
 
 	function Greet(index, data) {
@@ -173,6 +191,10 @@
 				}
 				html += " <br />";
 				prod.innerHTML = html;
+				if (json.Screenshot) {
+					prod.appendChild(Tag('img', {src: json.Screenshot}));
+					prod.appendChild(Tag('br'));
+				}
 				prod.appendChild(Tag('a', {href: "https://www.pouet.net/prod.php?which=" + json.ID}, '[pouet.net]'));
 				prod.appendChild(Text(" "));
 				prod.appendChild(Tag('a', {href: "https://demozoo.org/productions/" + json.Demozoo}, '[demozoo]'));
@@ -227,20 +249,36 @@
 		)
 	}
 
-	function $(name) { return document.getElementById(name); }
-
 	window.onload = function() {
 		$("in_prod_id").onkeyup = (e) => {
 			if (e.key === "Enter" || e.keyCode === 13) {
 				loadProd();
 			}
 		};
+
+		let prod_search = $("in_prod");
+		prod_search.addEventListener('change', (e) => {
+			console.log("Change: ", e);
+		});
+		prod_search.addEventListener('input', (e) => {
+			console.log("Input: ", e);
+			if (e.inputType === "insertReplacementText") {
+				$('in_prod_id').value = e.data;
+				loadProd();
+				return;
+			}
+
+			searchFormEdited(prod_search.value);
+		});
 	}
 </script>
 	</head>
 	<body>
-		<h2>Let's fill some greetings</h2>
-		Prod name: <input type="text" id="in_prod" onchange="searchFormEdited()" onkeyup="searchFormEdited()"/><br/>
+		<h1>Let's fill some greetings</h1>
+		<input type="text" list="prod_matches" id="in_prod" placehoder="Prod name...">
+		<!-- onchange="searchFormEdited()" onkeyup="searchFormEdited()"/> -->
+		<datalist id="prod_matches"></datalist>
+		<br/>
 		<div id="prods"></div>
 		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
 
