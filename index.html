@@ -3,7 +3,10 @@
 	<head>
 		<meta charset="UTF-8">
 		<title>Greets Graf</title>
+
+<style type="text/css">
 </style>
+
 <script type="text/javascript">
 	"use strict";
 
@@ -64,59 +67,6 @@
 		}
 
 		return req;
-	}
-
-
-
-
-	let currentSearch = {}
-
-	function searchCancel() {
-		if (currentSearch.searchXhr)
-			currentSearch.searchXhr.abort();
-		currentSearch = {}
-	}
-
-	function searchRequest(value, prod_list) {
-		console.log("Search request: ", value);
-		let name = value;
-		let element_result = document.getElementById("prods");
-
-		let query = {
-			name: name,
-		};
-
-		currentSearch.searchXhr = sendRequest("GET", "/v1/prods/search", query, null,
-			(response) => {
-				console.log("Received reply for: ", value, ": ", response);
-				let json = response ? JSON.parse(response) : null;
-
-				let html = `
-<table class="functions">
-<tr><th>id</th><th>name</th></tr>`;
-				if (json) {
-					json.forEach((obj) => {
-						prod_list.appendChild(Tag(
-							"option", {value: obj.ID}, null, [
-									Text(obj.Name + (obj.Disambiguation ? " (" + obj.Disambiguation + ")" : "")),
-									Text(" by "),
-									(obj.Groups && obj.Groups.length > 0) ? Tag("strong", null, obj.Groups[0].Name) : Text("N/A")]));
-							html += "<tr><td>" + obj["ID"] + "</td><td>" + obj["Name"] + "</td></tr>";
-					});
-				}
-				html += "</table>";
-				element_result.innerHTML = html;
-			},
-			() => {
-			}
-		)
-	}
-
-	const searchFormEdited = (value) => {
-		let prod_list = $('prod_matches');
-		prod_list.innerHTML = "";
-
-		debounce(() => searchRequest(value, prod_list), () => searchCancel())();
 	}
 
 	function Greet(index, data) {
@@ -249,6 +199,92 @@
 		)
 	}
 
+	function Autocomplete(args) {
+		this.input_field = args.input;
+		this.parent = this.input_field.parentNode;
+		this.suggestionContainer = Tag('div', {class: 'autocomplete-items'});
+		this.parent.appendChild(this.suggestionContainer);
+		this.focus = -1;
+
+		// funcFindVariants(value, funcSuccess(suggestion[] {.render}, funcFail)
+		this.funcFindVariants = args.funcFindVariants;
+		this.funcSelect = args.funcSelect; // (suggestion)
+		this.current_search = null;
+
+		this.input_field.addEventListener('input', (e) => {
+			this.clearSuggestionList();
+			let value = this.input_field.value;
+			if (value) {
+				this.requestSuggestionList(value);
+			}
+		});
+
+		const KEY_DOWN = 40;
+		const KEY_UP = 38;
+		const KEY_ENTER = 13;
+
+		this.input_field.addEventListener('keydown', (e) => {
+			if (!this.suggestions)
+				return;
+
+			if (e.keyCode == KEY_DOWN) {
+				e.preventDefault();
+				this.changeFocus(1);
+			} else if (e.keyCode == KEY_UP) {
+				e.preventDefault();
+				this.changeFocus(-1);
+			} else if (e.keyCode == KEY_ENTER) {
+				e.preventDefault();
+				if (this.focus >= 0 && this.focus < this.suggestions.length) {
+					let selection = this.suggestions[this.focus];
+					this.clearSuggestionList();
+					this.input_field.blur();
+					this.funcSelect(selection);
+				}
+			}
+		});
+	}
+
+	Autocomplete.prototype.changeFocus = function(delta) {
+		let prevFocus = this.focus;
+		this.focus += delta;
+		if (this.focus < 0) this.focus = this.suggestions.length - 1;
+		if (this.focus >= this.suggestions.length) this.focus = 0;
+
+		console.log(delta, prevFocus, this.focus);
+		if (prevFocus >= 0 && prevFocus < this.suggestions.length)
+			this.suggestions[prevFocus].deactivate();
+		if (this.focus >= 0 && this.focus < this.suggestions.length)
+			this.suggestions[this.focus].activate();
+	}
+
+	Autocomplete.prototype.clearSuggestionList = function() {
+		if (this.current_search) {
+			this.current_search.abort();
+			this.current_search = null;
+		}
+		this.suggestionContainer.innerHTML = "";
+		this.focus = -1;
+		this.suggestions = [];
+	}
+
+	Autocomplete.prototype.requestSuggestionList = function(value) {
+		this.clearSuggestionList();
+		debounce(() => {
+			this.clearSuggestionList();
+			this.current_search = this.funcFindVariants(value, (suggestions) => {
+				this.suggestions = suggestions;
+				for (let i in this.suggestions) {
+					let item = this.suggestions[i].element;
+					this.suggestionContainer.appendChild(item);
+				}
+			}, (error) => {
+				abort("LOL ERROR", error);
+			});
+		}, () => {}
+		)();
+	}
+
 	window.onload = function() {
 		$("in_prod_id").onkeyup = (e) => {
 			if (e.key === "Enter" || e.keyCode === 13) {
@@ -256,28 +292,53 @@
 			}
 		};
 
-		let prod_search = $("in_prod");
-		prod_search.addEventListener('change', (e) => {
-			console.log("Change: ", e);
-		});
-		prod_search.addEventListener('input', (e) => {
-			console.log("Input: ", e);
-			if (e.inputType === "insertReplacementText") {
-				$('in_prod_id').value = e.data;
+		let autocomplete = new Autocomplete({
+			input: $('in_prod'),
+			funcSelect: (item) => {
+				console.log("Selected", item);
+				$('in_prod_id').value = item.id;
 				loadProd();
-				return;
-			}
+			},
+			funcFindVariants: (value, found, error) => {
+				let query = { name: value };
+				let xhr = sendRequest("GET", "/v1/prods/search", query, null,
+					(response) => {
+						console.log("Received reply for: ", value, ": ", response);
+						let json = response ? JSON.parse(response) : null;
+						if (!json) {
+							found([]);
+							return;
+						}
 
-			searchFormEdited(prod_search.value);
+						let suggestions = [];
+
+						json.forEach((obj) => {
+							let element = Tag('div', null, null, [
+								Text(obj.Name + (obj.Disambiguation ? " (" + obj.Disambiguation + ")" : "")),
+								Text(" by "),
+								(obj.Groups && obj.Groups.length > 0) ? Tag("strong", null, obj.Groups[0].Name) : Text("N/A")]);
+							suggestions.push({
+								id: obj.ID,
+								element: element,
+								deactivate: () => { element.style = "color: black;"; },
+								activate: () => { element.style = "color: red;"; },
+							});
+						});
+
+						found(suggestions);
+					},
+					(response, status) => {
+						error({http_status: status, reponse: response});
+					}
+				)
+			}
 		});
 	}
 </script>
 	</head>
 	<body>
 		<h1>Let's fill some greetings</h1>
-		<input type="text" list="prod_matches" id="in_prod" placehoder="Prod name...">
-		<!-- onchange="searchFormEdited()" onkeyup="searchFormEdited()"/> -->
-		<datalist id="prod_matches"></datalist>
+		<input type="text" id="in_prod" placehoder="Prod name...">
 		<br/>
 		<div id="prods"></div>
 		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
