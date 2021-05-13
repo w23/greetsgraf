@@ -5,6 +5,13 @@
 		<title>Greets Graf</title>
 
 <style type="text/css">
+html {
+  box-sizing: border-box;
+}
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
 .autocomplete {
 	position: relative;
 	display: inline-block;
@@ -16,13 +23,13 @@
 	top: 100%;
 	left: 0;
 	right: 0;
-	border: 1px solid #ddd;
 }
 
 .autocomplete-item {
 	background-color: #fefefe;
 	cursor: pointer;
-	border-bottom: 1px solid #eee;
+	border: 1px solid #eee;
+	border-top: none;
 }
 
 .autocomplete-item:hover {
@@ -389,13 +396,11 @@
 		<h1>Let's fill some greetings</h1>
 		Demofinder 2000:
 		<div id="prod_search" class="autocomplete" style="width: 320px;">
-			<input type="text" id="in_prod" placehoder="Prod name...">
+			<input type="text" id="in_prod" style="width: 100%;" placehoder="Prod name...">
 		</div>
+		(Or input prod id directly: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button>)
 
 		<br/>
-
-		<div id="prods"></div>
-		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
 
 		<div id="prod_container" style="display: none;">
 			<div id="prod"></div>
