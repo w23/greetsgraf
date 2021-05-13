@@ -4,7 +4,7 @@
 		<meta charset="UTF-8">
 		<title>Greets Graf</title>
 
-<style type="text/css">
+		<style type="text/css">
 html {
   box-sizing: border-box;
 }
@@ -53,10 +53,9 @@ html {
 .item-active .group {
 	color: #ccc;
 }
+		</style>
 
-</style>
-
-<script type="text/javascript">
+		<script type="text/javascript">
 	"use strict";
 
 	function $(name) { return document.getElementById(name); }
@@ -349,7 +348,7 @@ html {
 			}
 		};
 
-		let autocomplete = new Autocomplete({
+		let prod_autocomplete = new Autocomplete({
 			input: $('in_prod'),
 			funcSelect: (item) => {
 				console.log("Selected", item);
@@ -389,8 +388,52 @@ html {
 				)
 			}
 		});
+
+		let group_autocomplete = new Autocomplete({
+			input: $('greet_add_group_id'),
+			funcSelect: (item) => {
+				$('greet_add_group_id').value = item.id;
+			},
+			funcFindVariants: (value, found, error) => {
+				let query = { name: value };
+				let xhr = sendRequest("GET", "/v1/groups/search", query, null,
+					(response) => {
+						let json = response ? JSON.parse(response) : null;
+						if (!json) {
+							found([]);
+							return;
+						}
+
+						let suggestions = [];
+
+						json.forEach((obj) => {
+							let desc = [Tag("strong", null, obj.Name)];
+							if (obj.Disambiguation) {
+								desc.push(
+									Tag("span", {class: "group"}, null, [
+										Text(" / " + obj.Disambiguation)
+									])
+								);
+							}
+							let element = Tag('div', {class: "item-inactive"}, null, desc);
+							suggestions.push({
+								id: obj.ID,
+								element: element,
+								deactivate: () => { element.setAttribute("class", "item-inactive"); },
+								activate: () => { element.setAttribute("class", "item-active"); },
+							});
+						});
+
+						found(suggestions);
+					},
+					(response, status) => {
+						error({http_status: status, reponse: response});
+					}
+				)
+			}
+		});
 	}
-</script>
+		</script>
 	</head>
 	<body>
 		<h1>Let's fill some greetings</h1>
@@ -406,7 +449,13 @@ html {
 			<div id="prod"></div>
 			<strong>Greetings:</strong><br/>
 			<div id="greets_list"></div>
-			Add new: GroupID: <input type="text" id="greet_add_group_id"> Note:<input type="text" placeholder="e.g. 1m37s or nfo" id="greed_add_reference"> <button onclick="greetAdd()">add</button>
+			Add new: GroupID:
+			<span class="autocomplete" style="width: 256px;">
+				<input type="text" style="width: 100%;" id="greet_add_group_id">
+			</span>
+			Note:
+				<input type="text" placeholder="e.g. 1m37s or nfo" id="greed_add_reference">
+				<button onclick="greetAdd()">add</button>
 		</div>
 	</body>
 </html>
