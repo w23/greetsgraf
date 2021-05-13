@@ -5,6 +5,48 @@
 		<title>Greets Graf</title>
 
 <style type="text/css">
+.autocomplete {
+	position: relative;
+	display: inline-block;
+}
+
+.autocomplete-items {
+	z-index: 99;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	border: 1px solid #ddd;
+}
+
+.autocomplete-item {
+	background-color: #fefefe;
+	cursor: pointer;
+	border-bottom: 1px solid #eee;
+}
+
+.autocomplete-item:hover {
+	background-color: #e9e9e9;
+}
+
+.item-inactive {
+	padding: 5px;
+}
+
+.item-inactive .group {
+	color: #777;
+}
+
+.item-active {
+	padding: 5px;
+	background-color: DodgerBlue !important;
+	color: #fff;
+}
+
+.item-active .group {
+	color: #ccc;
+}
+
 </style>
 
 <script type="text/javascript">
@@ -18,7 +60,7 @@
 			elem.innerHTML = body;
 		}
 		for (let k in attrs) {
-			elem[k] = attrs[k];
+			elem.setAttribute(k, attrs[k]);
 		}
 		for (let i in children) {
 			elem.appendChild(children[i]);
@@ -236,13 +278,17 @@
 			} else if (e.keyCode == KEY_ENTER) {
 				e.preventDefault();
 				if (this.focus >= 0 && this.focus < this.suggestions.length) {
-					let selection = this.suggestions[this.focus];
-					this.clearSuggestionList();
-					this.input_field.blur();
-					this.funcSelect(selection);
+					this.select(this.focus);
 				}
 			}
 		});
+	}
+
+	Autocomplete.prototype.select = function(index) {
+		let selection = this.suggestions[index];
+		this.clearSuggestionList();
+		this.input_field.blur();
+		this.funcSelect(selection);
 	}
 
 	Autocomplete.prototype.changeFocus = function(delta) {
@@ -251,7 +297,6 @@
 		if (this.focus < 0) this.focus = this.suggestions.length - 1;
 		if (this.focus >= this.suggestions.length) this.focus = 0;
 
-		console.log(delta, prevFocus, this.focus);
 		if (prevFocus >= 0 && prevFocus < this.suggestions.length)
 			this.suggestions[prevFocus].deactivate();
 		if (this.focus >= 0 && this.focus < this.suggestions.length)
@@ -276,7 +321,12 @@
 				this.suggestions = suggestions;
 				for (let i in this.suggestions) {
 					let item = this.suggestions[i].element;
-					this.suggestionContainer.appendChild(item);
+					// TODO add click
+					let elem = Tag('div', {class:'autocomplete-item'}, null, [item]);
+					elem.addEventListener("click", (e) => {
+						this.select(i);
+					});
+					this.suggestionContainer.appendChild(elem);
 				}
 			}, (error) => {
 				abort("LOL ERROR", error);
@@ -303,7 +353,6 @@
 				let query = { name: value };
 				let xhr = sendRequest("GET", "/v1/prods/search", query, null,
 					(response) => {
-						console.log("Received reply for: ", value, ": ", response);
 						let json = response ? JSON.parse(response) : null;
 						if (!json) {
 							found([]);
@@ -313,15 +362,15 @@
 						let suggestions = [];
 
 						json.forEach((obj) => {
-							let element = Tag('div', null, null, [
+							let element = Tag('div', {class: "item-inactive"}, null, [
 								Text(obj.Name + (obj.Disambiguation ? " (" + obj.Disambiguation + ")" : "")),
 								Text(" by "),
-								(obj.Groups && obj.Groups.length > 0) ? Tag("strong", null, obj.Groups[0].Name) : Text("N/A")]);
+									(obj.Groups && obj.Groups.length > 0) ? Tag("span", {class: "group"}, obj.Groups[0].Name) : Text("N/A")]);
 							suggestions.push({
 								id: obj.ID,
 								element: element,
-								deactivate: () => { element.style = "color: black;"; },
-								activate: () => { element.style = "color: red;"; },
+								deactivate: () => { element.setAttribute("class", "item-inactive"); },
+								activate: () => { element.setAttribute("class", "item-active"); },
 							});
 						});
 
@@ -338,8 +387,13 @@
 	</head>
 	<body>
 		<h1>Let's fill some greetings</h1>
-		<input type="text" id="in_prod" placehoder="Prod name...">
+		Demofinder 2000:
+		<div id="prod_search" class="autocomplete" style="width: 320px;">
+			<input type="text" id="in_prod" placehoder="Prod name...">
+		</div>
+
 		<br/>
+
 		<div id="prods"></div>
 		Prod id: <input type="text" id="in_prod_id"/><button onclick="loadProd()">Load</button><br/>
 
