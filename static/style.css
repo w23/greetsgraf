@@ -1,0 +1,59 @@
+html {
+  box-sizing: border-box;
+	min-height: 100%;
+}
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+footer {
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 100%;
+	text-align: center;
+	color: #888;
+	margin: .5em;
+}
+
+.autocomplete {
+	position: relative;
+	display: inline-block;
+}
+
+.autocomplete-items {
+	z-index: 99;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+}
+
+.autocomplete-item {
+	background-color: #fefefe;
+	cursor: pointer;
+	border: 1px solid #eee;
+	border-top: none;
+}
+
+.autocomplete-item:hover {
+	background-color: #e9e9e9;
+}
+
+.item-inactive {
+	padding: 5px;
+}
+
+.item-inactive .group {
+	color: #777;
+}
+
+.item-active {
+	padding: 5px;
+	background-color: DodgerBlue !important;
+	color: #fff;
+}
+
+.item-active .group {
+	color: #ccc;
+}

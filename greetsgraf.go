@@ -324,37 +324,6 @@ func (c *Context) prodGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func (c *Context) greetsSearch(w http.ResponseWriter, r *http.Request) {
-// 	query := r.URL.Query()
-//
-// 	db := c.db
-// 	prod_id, err := strconv.Atoi(query.Get("prod"))
-// 	if err == nil {
-// 		db = db.Where("prod_id = ?", prod_id)
-// 	}
-//
-// 	greetee_id, err := strconv.Atoi(query.Get("greetee"))
-// 	if err == nil {
-// 		db = db.Where("greetee_id = ?", greetee_id)
-// 	}
-//
-// 	// group_id, err := strconv.Atoi(query.Get("greeter"))
-// 	// if err == nil {
-// 	// 	db = db.Where("greetee_id = ?", group_id)
-// 	// }
-//
-// 	var greets []Greet
-// 	db = db.Find(&greets)
-// 	log.Printf("%+v", greets)
-// 	err = db.Error
-// 	if err != nil {
-// 		log.Printf("Error: %+v", err)
-// 		respondErrJson(w, http.StatusInternalServerError, err)
-// 		return
-// 	}
-// 	respondJson(w, http.StatusOK, greets)
-// }
-
 func (c *Context) greetsCreate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ProdId uint
@@ -415,13 +384,13 @@ func (c *Context) greetsDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func listen(db *gorm.DB, listen string) {
+func listen(db *gorm.DB, listen string, serve_static string) {
 	ctx := Context{db}
 
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(10 * time.Second))
 
 	r.Get("/v1/groups/search", ctx.findGroup)
 	r.Route("/v1/prods", func (r chi.Router) {
@@ -434,18 +403,6 @@ func listen(db *gorm.DB, listen string) {
 
 	r.Route("/v1/greets", func (r chi.Router) {
 
-	// TODO Need to cover:
-	// - all greets from group id
-	//	- constraints:
-	//		- time
-	//		-	to group(s)
-	//	- sort by:
-	//		- time
-	//    - count ?
-	// - all greets from prod types
-
-		//r.Get("/search", ctx.greetsSearch)
-
 		r.Post("/", ctx.greetsCreate)
 
 		r.Route("/{id}", func (r chi.Router) {
@@ -455,7 +412,12 @@ func listen(db *gorm.DB, listen string) {
 		})
 	})
 
-	r.Get("/", func (w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "index.html") })
+	if serve_static != "" {
+		fs := http.FileServer(http.Dir(serve_static))
+		r.Get("/*", func (w http.ResponseWriter, r *http.Request) {
+			fs.ServeHTTP(w, r)
+		})
+	}
 
 	log.Fatal(http.ListenAndServe(listen, r))
 }
@@ -468,6 +430,7 @@ type Args struct {
 	serve bool
 	listen string
 	usage bool
+	static string
 }
 
 func parseArgs() (args Args) {
@@ -477,6 +440,7 @@ func parseArgs() (args Args) {
 	flag.StringVar(&args.pouet_groups, "groups", "", "pouetdatadump-groups .json.gz file taken from https://data.pouet.net/")
 	flag.BoolVar(&args.serve, "serve", false, "Start a server to serve REST API calls")
 	flag.StringVar(&args.listen, "listen", "localhost:8000", "Address to listen to and to serve api calls from")
+	flag.StringVar(&args.static, "static", "", "(intendede for local debug only) Also serve static data at this path")
 	flag.BoolVar(&args.usage, "help", false, "Print usage")
 	flag.Parse()
 	return
@@ -501,6 +465,6 @@ func main() {
 	}
 
 	if args.serve {
-		listen(db, args.listen)
+		listen(db, args.listen, args.static)
 	}
 }
