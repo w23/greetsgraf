@@ -59,6 +59,10 @@ function sendRequest(method, path, query, body, funcDone, funcError) {
 	return req;
 }
 
+const KEY_DOWN = 40;
+const KEY_UP = 38;
+const KEY_ENTER = 13;
+
 function Autocomplete(args) {
 	this.input_field = args.input;
 	this.parent = this.input_field.parentNode;
@@ -78,10 +82,6 @@ function Autocomplete(args) {
 			this.requestSuggestionList(value);
 		}
 	});
-
-	const KEY_DOWN = 40;
-	const KEY_UP = 38;
-	const KEY_ENTER = 13;
 
 	this.input_field.addEventListener('keydown', (e) => {
 		if (!this.suggestions)

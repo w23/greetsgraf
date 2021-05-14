@@ -320,7 +320,75 @@ func (c *Context) prodGet(w http.ResponseWriter, r *http.Request) {
 	} else {
 		c.db.Model(&prod).Association("Groups").Find(&prod.Groups)
 		c.db.Model(&prod).Association("Greets").Find(&prod.Greets)
-		respondJson(w, http.StatusOK, prod)
+
+		// TODO maybe it's better done through a custom marshaller ...
+		type ResponseGroup struct {
+			ID uint
+			Name string
+			Disambiguation string
+		}
+
+		type ResponseGreet struct {
+			ID uint
+			Group ResponseGroup
+			Note string
+		}
+
+		response_prod := struct {
+			ID uint
+			Name string
+			Year int
+			Month int
+			Day int
+			Video string
+			Rank int
+			VoteUp int
+			VotePig int
+			VoteDown int
+			Demozoo int
+			Screenshot string
+			Groups []ResponseGroup
+			Greets []ResponseGreet
+		} {
+			ID: prod.ID,
+			Name: prod.Name,
+			Year: prod.Year,
+			Month: prod.Month,
+			Day: prod.Day,
+			Video: prod.Video,
+			Rank: prod.Rank,
+			VoteUp: prod.VoteUp,
+			VotePig: prod.VotePig,
+			VoteDown: prod.VoteDown,
+			Demozoo: prod.Demozoo,
+			Screenshot: prod.Screenshot,
+		}
+
+		for i, _ := range prod.Groups {
+			group := &prod.Groups[i]
+			response_prod.Groups = append(response_prod.Groups, ResponseGroup{
+				ID: group.ID,
+				Name: group.Name,
+				Disambiguation: group.Disambiguation,
+			})
+		}
+
+		for i, _ := range prod.Greets {
+			greet := &prod.Greets[i]
+			var group Group
+			c.db.Find(&group, "ID = ?", greet.GreeteeID)
+			response_prod.Greets = append(response_prod.Greets, ResponseGreet{
+				ID: greet.ID,
+				Note: greet.Reference,
+				Group: ResponseGroup{
+					ID: group.ID,
+					Name: group.Name,
+					Disambiguation: group.Disambiguation,
+				},
+			})
+		}
+
+		respondJson(w, http.StatusOK, response_prod)
 	}
 }
 
@@ -328,7 +396,7 @@ func (c *Context) greetsCreate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ProdId uint
 		GroupId uint
-		Reference string
+		Note string
 	}
 	err := json.NewDecoder(r.Body).Decode(&body)
 	if err != nil {
@@ -348,7 +416,7 @@ func (c *Context) greetsCreate(w http.ResponseWriter, r *http.Request) {
 		}
 
 		greet := Greet{
-			Reference: body.Reference,
+			Reference: body.Note,
 			GreeteeID: body.GroupId,
 		}
 
@@ -392,7 +460,10 @@ func listen(db *gorm.DB, listen string, serve_static string) {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Timeout(10 * time.Second))
 
-	r.Get("/v1/groups/search", ctx.findGroup)
+	r.Route("/v1/groups", func (r chi.Router) {
+		r.Get("/search", ctx.findGroup)
+		//r.Get("/{id}", ctx.getGroup)
+	})
 	r.Route("/v1/prods", func (r chi.Router) {
 		r.Get("/search", ctx.findProd)
 		r.Route("/{id}", func (r chi.Router) {

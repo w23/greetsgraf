@@ -9,31 +9,35 @@
 	</head>
 
 	<body>
-		<h1>Let's fill some greetings</h1>
-		Demofinder 2000:
-		<div id="prod_search" class="autocomplete" style="width: 320px;">
-			<input type="text" id="in_prod" style="width: 100%;" placehoder="Prod name here...">
-		</div>
-		<span style="color: #777;">(or Pouet prod id: <input type="text" style="width: 6em;" id="in_prod_id"/><button onclick="loadProd()">Load</button>)</span>
+		<div id="main-wrapper">
+			<div id="main-content">
+				<h1>Let's fill some greetings</h1>
+				Demofinder 2000:
+				<div id="prod_search" class="autocomplete" style="width: 320px;">
+					<input type="text" id="in_prod" style="width: 100%;" placehoder="Prod name here...">
+				</div>
+				<span style="color: #777;">(or Pouet prod id: <input type="text" style="width: 6em;" id="in_prod_id"/><button onclick="loadProd()">Load</button>)</span>
 
-		<br/>
+				<br/>
 
-		<div id="prod_container" style="display: none;">
-			<div id="prod"></div>
-			<strong>Greetings:</strong><br/>
-			<div id="greets_list"></div>
-			Add new: GroupID:
-			<span class="autocomplete" style="width: 256px;">
-				<input type="text" value="" style="width: 100%;" id="greet_add_group_id">
-			</span>
-			Note:
-				<input type="text" value="" placeholder="e.g. 1m37s or nfo" id="greed_add_reference">
-				<button onclick="greetAdd()">add</button>
+				<div id="prod_container" style="display: none;">
+					<div id="prod"></div>
+					<strong>Greetings:</strong><br/>
+					<div id="greets_list"></div>
+					Add new greeting to group:
+					<span class="autocomplete" style="width: 256px;">
+						<input type="text" value="" style="width: 100%;" id="greet_add_group" placeholder="Group name">
+					</span>
+					Note:
+						<input type="text" value="" placeholder="e.g. 13:37 or nfo" id="greet_add_note">
+						<button id="greet_add_button" disabled>add</button>
+				</div>
+			</div>
+			<footer>
+				Haphazardly coded by <a href="https://www.pouet.net/user.php?who=24180">provod</a>/<a href="https://www.pouet.net/groups.php?which=13728">jetlag</a> <small>(I clearly have no idea what I'm doing)</small><br/>
+				Sources: <a href="https://github.com/w23/greetsgraf">github.com/w23/greetsgraf</a>.
+				Questions? <a href="https://www.pouet.net/topic.php?which=12099">Pouet.net thread</a>
+			</footer>
 		</div>
-		<footer>
-			Haphazardly coded by <a href="https://www.pouet.net/user.php?who=24180">provod</a>/<a href="https://www.pouet.net/groups.php?which=13728">jetlag</a> <small>(I don't know what I'm doing)</small><br/>
-			Sources: <a href="https://github.com/w23/greetsgraf">github.com/w23/greetsgraf</a>.
-			Questions? <a href="https://www.pouet.net/topic.php?which=12099">Pouet.net thread</a>
-		</footer>
 	</body>
 </html>

@@ -1,5 +1,7 @@
 "use strict";
 
+let greetAdd;
+
 function Greet(index, data) {
 	this.index = index;
 	this.data = data ? data : {};
@@ -8,19 +10,25 @@ function Greet(index, data) {
 Greet.prototype.createRow = function() {
 	let tag_input_group =  Tag('input', {
 		type: "text",
-		value: this.data.GreeteeID
+		value: this.data.Group.Name
 	});
+	if (this.data.Group.Disambiguation) {
+		tag_input_group.value += " / " + this.data.Group.Disambiguation;
+	}
+	tag_input_group.disabled = true;
+
 	let tag_input_note = Tag('input', {
 		type: "text",
-		value: this.data.Reference
+		value: this.data.Note
 	});
-	let tag_button_delete = Tag('button', {
-		onclick: () => {
-			if (confirm("Are you sure you want to delete this greet?")) { // TODO show greet info
-				this.delete();
-			}
+	tag_input_note.disabled = true;
+
+	let tag_button_delete = Tag('button', null, "Delete");
+	tag_button_delete.onclick = () => {
+		if (confirm("Are you sure you want to delete this greet?")) { // TODO show greet info
+			this.delete();
 		}
-	}, "Delete");
+	};
 
 	return Tag('tr', {class: "greet"}, null, [
 		Tag('td', null, null, [
@@ -44,7 +52,7 @@ Greet.prototype.delete = function() {
 	)
 }
 
-function loadProd() {
+function loadProd(args) {
 	let pid = parseInt(document.getElementById("in_prod_id").value);
 	if (isNaN(pid)) {
 		return;
@@ -78,7 +86,9 @@ function loadProd() {
 			}
 			prod.appendChild(Tag('a', {href: "https://www.pouet.net/prod.php?which=" + json.ID}, '[pouet.net]'));
 			prod.appendChild(Text(" "));
-			prod.appendChild(Tag('a', {href: "https://demozoo.org/productions/" + json.Demozoo}, '[demozoo]'));
+			if (json.Demozoo > 0) {
+				prod.appendChild(Tag('a', {href: "https://demozoo.org/productions/" + json.Demozoo}, '[demozoo]'));
+			}
 			prod.appendChild(Text(" "));
 			prod.appendChild(Tag('a', {href: "https://www.pouet.net/prod_nfo.php?which=" + json.ID}, '[nfo]'));
 
@@ -93,47 +103,81 @@ function loadProd() {
 			}
 
 			prod_container.style.display = "block";
+
+			if (args && args.clear_greets) {
+				greetAdd.clear();
+			}
 		},
 		(response) => {
 			document.getElementById("prod").innerHTML = "ERROR:" + response;
 		}
 	)
 }
-function greetAdd() {
-	let pid = parseInt(document.getElementById("in_prod_id").value);
-	if (isNaN(pid)) {
-		return;
-	}
 
-	let gid = parseInt(document.getElementById("greet_add_group_id").value);
-	if (isNaN(gid)) {
-		return;
-	}
-
-	let reference = document.getElementById("greed_add_reference").value;
-
-	let body = {
-		ProdId: pid,
-		GroupId: gid,
-		Reference: reference
-	};
-
-	let xhr = sendRequest("POST", "/v1/greets/", null, body,
-		(response, status) => {
-			console.log(status, response);
-			loadProd();
-		},
-		(response, status) => {
-			console.log(status, response)
-			document.getElementById("greets_list").innerHTML = "ERROR:" + response;
-		}
-	)
-}
 
 window.onload = function() {
+	greetAdd = function () {
+		let self = Object();
+
+		let greet_add_group = $('greet_add_group');
+		let greet_add_note = $('greet_add_note');
+		let greet_add_button = $('greet_add_button');
+		let greet_add_group_id = null;
+
+		self.clear = () => {
+			greet_add_group.value = "";
+			greet_add_note.value = "";
+			greet_add_button.disabled = true;
+			greet_add_group_id = null;
+		}
+
+		self.clear();
+
+		self.add = () => {
+			let pid = parseInt($("in_prod_id").value);
+			if (isNaN(pid)) {
+				return;
+			}
+
+			if (!greet_add_group_id || isNaN(greet_add_group_id)) {
+				return;
+			}
+
+			let note = greet_add_note.value;
+
+			let body = {
+				ProdId: pid,
+				GroupId: greet_add_group_id,
+				Note: note
+			};
+
+			let xhr = sendRequest("POST", "/v1/greets/", null, body,
+				(response, status) => {
+					console.log(status, response);
+					self.clear();
+					loadProd();
+				},
+				(response, status) => {
+					console.log(status, response)
+					alert("ERROR:" + response);
+				}
+			)
+		}
+
+		greet_add_button.onclick = self.add;
+
+		self.setGroupNameAndId = (name, gid) => {
+			greet_add_group.value = name;
+			greet_add_group_id = gid;
+			greet_add_button.disabled = false;
+		}
+
+		return self;
+	}();
+
 	$("in_prod_id").onkeyup = (e) => {
-		if (e.key === "Enter" || e.keyCode === 13) {
-			loadProd();
+		if (e.keyCode === KEY_ENTER || e.key === "Enter") {
+			loadProd({clear_greets: true});
 		}
 	};
 
@@ -141,8 +185,9 @@ window.onload = function() {
 		input: $('in_prod'),
 		funcSelect: (item) => {
 			console.log("Selected", item);
+			$('in_prod').value = item.name;
 			$('in_prod_id').value = item.id;
-			loadProd();
+			loadProd({clear_greets: true});
 		},
 		funcFindVariants: (value, found, error) => {
 			let query = { name: value };
@@ -163,6 +208,7 @@ window.onload = function() {
 								(obj.Groups && obj.Groups.length > 0) ? Tag("span", {class: "group"}, obj.Groups[0].Name) : Text("N/A")]);
 						suggestions.push({
 							id: obj.ID,
+							name: obj.Name,
 							element: element,
 							deactivate: () => { element.setAttribute("class", "item-inactive"); },
 							activate: () => { element.setAttribute("class", "item-active"); },
@@ -179,9 +225,9 @@ window.onload = function() {
 	});
 
 	let group_autocomplete = new Autocomplete({
-		input: $('greet_add_group_id'),
+		input: $('greet_add_group'),
 		funcSelect: (item) => {
-			$('greet_add_group_id').value = item.id;
+			greetAdd.setGroupNameAndId(item.name, item.id);
 		},
 		funcFindVariants: (value, found, error) => {
 			let query = { name: value };
@@ -197,7 +243,9 @@ window.onload = function() {
 
 					json.forEach((obj) => {
 						let desc = [Tag("strong", null, obj.Name)];
+						let name = obj.Name;
 						if (obj.Disambiguation) {
+							name += " / " + obj.Disambiguation;
 							desc.push(
 								Tag("span", {class: "group"}, null, [
 									Text(" / " + obj.Disambiguation)
@@ -207,6 +255,7 @@ window.onload = function() {
 						let element = Tag('div', {class: "item-inactive"}, null, desc);
 						suggestions.push({
 							id: obj.ID,
+							name: name,
 							element: element,
 							deactivate: () => { element.setAttribute("class", "item-inactive"); },
 							activate: () => { element.setAttribute("class", "item-active"); },
