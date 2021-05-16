@@ -12,25 +12,27 @@
 		<div id="main-wrapper">
 			<div id="main-content">
 				<h1>Let's fill some greetings</h1>
-				Demofinder 2000:
+
+				<label for="in_prod">Demofinder 2000:</label>
 				<div id="prod_search" class="autocomplete" style="width: 320px;">
 					<input type="text" id="in_prod" style="width: 100%;" placehoder="Prod name here...">
 				</div>
-				<span style="color: #777;">(or Pouet prod id: <input type="text" style="width: 6em;" id="in_prod_id"><button onclick="loadProd()">Load</button>)</span>
+				<span style="color: #777;">(or <label>Pouet prod id: <input type="text" style="width: 6em;" id="in_prod_id"></label> <button onclick="loadProd()">Load</button>)</span>
 
 				<br>
 
 				<div id="prod_container" style="display: none;">
 					<div id="prod"></div>
+
 					<strong>Greetings:</strong><br>
 					<div id="greets_list"></div>
-					Add new greeting to group:
+
+					<label for="greet_add_group">Add new greeting to group:</label>
 					<span class="autocomplete" style="width: 256px;">
 						<input type="text" value="" style="width: 100%;" id="greet_add_group" placeholder="Group name">
 					</span>
-					Note:
-						<input type="text" value="" placeholder="e.g. 13:37 or nfo" id="greet_add_note">
-						<button id="greet_add_button" disabled>add</button>
+					<label>Note: <input type="text" value="" placeholder="e.g. 13:37 or nfo" id="greet_add_note"></label>
+					<button id="greet_add_button" disabled>add</button>
 				</div>
 			</div>
 			<footer>
