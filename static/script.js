@@ -221,6 +221,7 @@ window.onload = function() {
 					error({http_status: status, reponse: response});
 				}
 			)
+			return xhr;
 		}
 	});
 
@@ -268,6 +269,7 @@ window.onload = function() {
 					error({http_status: status, reponse: response});
 				}
 			)
+			return xhr;
 		}
 	});
 }

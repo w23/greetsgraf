@@ -460,26 +460,30 @@ func listen(db *gorm.DB, listen string, serve_static string) {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Timeout(10 * time.Second))
 
-	r.Route("/v1/groups", func (r chi.Router) {
-		r.Get("/search", ctx.findGroup)
-		//r.Get("/{id}", ctx.getGroup)
-	})
-	r.Route("/v1/prods", func (r chi.Router) {
-		r.Get("/search", ctx.findProd)
-		r.Route("/{id}", func (r chi.Router) {
-			r.Get("/", ctx.prodGet)
-			//r.Get("/greets", ctx.prodGetGreets)
+	r.Route("/v1", func (r chi.Router) {
+		//r.Get("/stats", ctx.getStats)
+
+		r.Route("/groups", func (r chi.Router) {
+			r.Get("/search", ctx.findGroup)
+			//r.Get("/{id}", ctx.getGroup)
 		})
-	})
+		r.Route("/prods", func (r chi.Router) {
+			r.Get("/search", ctx.findProd)
+			r.Route("/{id}", func (r chi.Router) {
+				r.Get("/", ctx.prodGet)
+				//r.Get("/greets", ctx.prodGetGreets)
+			})
+		})
 
-	r.Route("/v1/greets", func (r chi.Router) {
+		r.Route("/greets", func (r chi.Router) {
 
-		r.Post("/", ctx.greetsCreate)
+			r.Post("/", ctx.greetsCreate)
 
-		r.Route("/{id}", func (r chi.Router) {
-			//r.Get("", ctx.greetsGet)
-			//r.Patch("", ctx.greetsUpdate)
-			r.Delete("/", ctx.greetsDelete)
+			r.Route("/{id}", func (r chi.Router) {
+				//r.Get("", ctx.greetsGet)
+				//r.Patch("", ctx.greetsUpdate)
+				r.Delete("/", ctx.greetsDelete)
+			})
 		})
 	})
 

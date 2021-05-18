@@ -20,7 +20,7 @@ function Text(text) {
 	return document.createTextNode(text);
 }
 
-function debounce(func, cancelFunc, timeout = 200) {
+function debounce(func, cancelFunc, timeout = 500) {
 	let timer;
 	return (...args) => {
 		cancelFunc();
@@ -64,8 +64,8 @@ const KEY_UP = 38;
 const KEY_ENTER = 13;
 
 function Autocomplete(args) {
-	this.input_field = args.input;
-	this.parent = this.input_field.parentNode;
+	this.inputField = args.input;
+	this.parent = this.inputField.parentNode;
 	this.suggestionContainer = Tag('div', {class: 'autocomplete-items'});
 	this.parent.appendChild(this.suggestionContainer);
 	this.focus = -1;
@@ -73,17 +73,17 @@ function Autocomplete(args) {
 	// funcFindVariants(value, funcSuccess(suggestion[] {.render}, funcFail)
 	this.funcFindVariants = args.funcFindVariants;
 	this.funcSelect = args.funcSelect; // (suggestion)
-	this.current_search = null;
+	this.currentSearch = null;
 
-	this.input_field.addEventListener('input', (e) => {
+	this.inputField.addEventListener('input', (e) => {
 		this.clearSuggestionList();
-		let value = this.input_field.value;
+		let value = this.inputField.value;
 		if (value) {
 			this.requestSuggestionList(value);
 		}
 	});
 
-	this.input_field.addEventListener('keydown', (e) => {
+	this.inputField.addEventListener('keydown', (e) => {
 		if (!this.suggestions)
 			return;
 
@@ -105,7 +105,7 @@ function Autocomplete(args) {
 Autocomplete.prototype.select = function(index) {
 	let selection = this.suggestions[index];
 	this.clearSuggestionList();
-	this.input_field.blur();
+	this.inputField.blur();
 	this.funcSelect(selection);
 }
 
@@ -122,9 +122,13 @@ Autocomplete.prototype.changeFocus = function(delta) {
 }
 
 Autocomplete.prototype.clearSuggestionList = function() {
-	if (this.current_search) {
-		this.current_search.abort();
-		this.current_search = null;
+	if (this.debounceTimer) {
+		clearTimeout(this.debounceTimer);
+		this.debounceTimer = null;
+	}
+	if (this.currentSearch) {
+		this.currentSearch.abort();
+		this.currentSearch = null;
 	}
 	this.suggestionContainer.innerHTML = "";
 	this.focus = -1;
@@ -133,22 +137,21 @@ Autocomplete.prototype.clearSuggestionList = function() {
 
 Autocomplete.prototype.requestSuggestionList = function(value) {
 	this.clearSuggestionList();
-	debounce(() => {
-		this.clearSuggestionList();
-		this.current_search = this.funcFindVariants(value, (suggestions) => {
+	this.debounceTimer = setTimeout(() => {
+		this.debounceTimer = null;
+		this.currentSearch = this.funcFindVariants(value, (suggestions) => {
 			this.suggestions = suggestions;
 			for (let i in this.suggestions) {
 				let item = this.suggestions[i].element;
-				// TODO add click
 				let elem = Tag('div', {class:'autocomplete-item'}, null, [item]);
 				elem.addEventListener("click", (e) => {
 					this.select(i);
 				});
 				this.suggestionContainer.appendChild(elem);
+				elem.scrollIntoView(false);
 			}
 		}, (error) => {
 			abort("LOL ERROR", error);
 		});
-	}, () => {}
-	)();
+	}, 200);
 }
