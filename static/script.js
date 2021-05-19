@@ -218,7 +218,7 @@ window.onload = function() {
 					found(suggestions);
 				},
 				(response, status) => {
-					error({http_status: status, reponse: response});
+					error({http_status: status, reponse: JSON.parse(response)});
 				}
 			)
 			return xhr;
@@ -266,7 +266,7 @@ window.onload = function() {
 					found(suggestions);
 				},
 				(response, status) => {
-					error({http_status: status, reponse: response});
+					error({http_status: status, reponse: JSON.parse(response)});
 				}
 			)
 			return xhr;

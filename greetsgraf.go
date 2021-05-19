@@ -84,6 +84,22 @@ func ContainsInsensitive(a, b string) bool {
 	return strings.Contains(strings.ToLower(a), strings.ToLower(b))
 }
 
+func buildIndex(db *gorm.DB) {
+	if err := db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)").Error; err != nil {
+		log.Fatalf("Failed to create FTS index for groups: %+v", err);
+	}
+	if err := db.Exec("INSERT INTO groups_fts (name, id) SELECT name, id FROM groups").Error; err != nil {
+		log.Fatalf("Failed to populate FTS index for groups: %+v", err);
+	}
+
+	if err := db.Exec("CREATE VIRTUAL TABLE prods_fts USING fts5(name, id)").Error; err != nil {
+		log.Fatalf("Failed to create FTS index for prods: %+v", err);
+	}
+	if err := db.Exec("INSERT INTO prods_fts (name, id) SELECT name, id FROM prods").Error; err != nil {
+		log.Fatalf("Failed to populate FTS index for prods: %+v", err);
+	}
+}
+
 func create(db *gorm.DB, prodsfile string, groupsfile string) {
 	if prodsfile == "" || groupsfile == "" {
 		flag.Usage()
@@ -279,8 +295,14 @@ func (c *Context) findGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var groups []Group
-	c.db.Where("name LIKE ?", "%"+name+"%").Limit(10).Find(&groups)
-	respondJson(w, http.StatusOK, &groups)
+	db := c.db.Table("groups").Joins("INNER JOIN groups_fts ON groups_fts.id = groups.id").Where("groups_fts MATCH ?", name).Order("rank").Limit(10).Find(&groups)
+	if db.Error == gorm.ErrRecordNotFound {
+		respondJson(w, http.StatusNotFound, struct{}{})
+	} else if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	} else {
+		respondJson(w, http.StatusOK, &groups)
+	}
 }
 
 func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +313,7 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := c.db.Where("name LIKE ?", "%"+name+"%")
+	db := c.db.Table("prods").Joins("INNER JOIN prods_fts ON prods_fts.id = prods.id").Where("prods_fts MATCH ?", name).Order("prods_fts.rank")
 
 	var prods []Prod
 	db = db.Preload("Groups").Limit(10).Find(&prods)
@@ -300,7 +322,7 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 	} else if db.Error != nil {
 		respondErrJson(w, http.StatusInternalServerError, db.Error)
 	} else {
-		respondJson(w, http.StatusOK, prods)
+		respondJson(w, http.StatusOK, &prods)
 	}
 }
 
@@ -506,6 +528,7 @@ type Args struct {
 	listen string
 	usage bool
 	static string
+	index bool
 }
 
 func parseArgs() (args Args) {
@@ -516,6 +539,7 @@ func parseArgs() (args Args) {
 	flag.BoolVar(&args.serve, "serve", false, "Start a server to serve REST API calls")
 	flag.StringVar(&args.listen, "listen", "localhost:8000", "Address to listen to and to serve api calls from")
 	flag.StringVar(&args.static, "static", "", "(intendede for local debug only) Also serve static data at this path")
+	flag.BoolVar(&args.index, "index", false, "Build FTS5 index")
 	flag.BoolVar(&args.usage, "help", false, "Print usage")
 	flag.Parse()
 	return
@@ -537,6 +561,9 @@ func main() {
 
 	if args.create {
 		create(db, args.pouet_prods, args.pouet_groups)
+		buildIndex(db)
+	} else if args.index {
+		buildIndex(db)
 	}
 
 	if args.serve {

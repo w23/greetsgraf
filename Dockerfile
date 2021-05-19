@@ -13,7 +13,7 @@ COPY . .
 RUN go get
 
 # Build statically
-RUN go build -ldflags="-extldflags=-static" -tags sqlite_omit_load_extension -a -o greetsgraf
+RUN go build -ldflags="-extldflags=-static" -tags "sqlite_omit_load_extension sqlite_fts5" -a -o greetsgraf
 
 
 # Create a new tiny image

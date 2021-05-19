@@ -151,7 +151,7 @@ Autocomplete.prototype.requestSuggestionList = function(value) {
 				elem.scrollIntoView(false);
 			}
 		}, (error) => {
-			abort("LOL ERROR", error);
+			alert("LOL ERROR: " + JSON.stringify(error));
 		});
 	}, 200);
 }
