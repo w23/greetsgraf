@@ -65,3 +65,7 @@ footer {
 .item-active .group {
 	color: #ccc;
 }
+
+table, tr, td, th {
+	border: 1px solid #888;
+}
