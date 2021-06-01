@@ -297,12 +297,14 @@ func (c *Context) findGroup(w http.ResponseWriter, r *http.Request) {
 	const limit = 10
 
 	var groups []Group
-	db := c.db.Table("groups").Joins("INNER JOIN groups_fts ON groups_fts.id = groups.id").Where("groups_fts MATCH ?", name).Order("rank").Limit(limit).Find(&groups)
-	if db.Error == gorm.ErrRecordNotFound {
-		respondJson(w, http.StatusNotFound, struct{}{})
-	} else if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
-	} else {
+	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
+	/*db := */ c.db.Table("groups").Joins("INNER JOIN groups_fts ON groups_fts.id = groups.id").Where("groups_fts MATCH ?", name).Order("rank").Limit(limit).Find(&groups)
+	// if db.Error == gorm.ErrRecordNotFound {
+	// 	respondJson(w, http.StatusNotFound, struct{}{})
+	// } else if db.Error != nil {
+	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
+	// } else
+	{
 		if len(groups) < limit {
 			var like_groups []Group
 			c.db.Limit(limit - len(groups)).Find(&like_groups, "name LIKE ?", "%" + name + "%")
@@ -345,11 +347,13 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 
 	var prods []Prod
 	db = db.Preload("Groups").Limit(limit).Find(&prods)
-	if db.Error == gorm.ErrRecordNotFound {
-		respondJson(w, http.StatusNotFound, struct{}{})
-	} else if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
-	} else {
+	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
+	//if db.Error == gorm.ErrRecordNotFound {
+	// respondJson(w, http.StatusNotFound, struct{}{})
+	// } else if db.Error != nil {
+	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
+	//} else
+	{
 		if len(prods) < limit {
 			var like_prods []Prod
 			c.db.Preload("Groups").Limit(limit - len(prods)).Find(&like_prods, "name LIKE ?", "%" + name + "%")
