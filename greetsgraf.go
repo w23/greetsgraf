@@ -286,7 +286,7 @@ type Context struct {
 	db *gorm.DB
 }
 
-func (c *Context) findGroup(w http.ResponseWriter, r *http.Request) {
+func (c *Context) groupsFind(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	name := query.Get("name")
 	if name == "" {
@@ -523,6 +523,39 @@ func (c *Context) greetsDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (c *Context) getStats(w http.ResponseWriter, r *http.Request) {
+	var stats struct{
+		TotalGreets int64
+		TotalProds int64
+		TotalGroups int64
+		ProdsWithGreets int64
+		GreetedGroups int64
+	}
+
+	c.db.Model(Greet{}).Count(&stats.TotalGreets)
+	c.db.Model(Prod{}).Count(&stats.TotalProds)
+	c.db.Model(Group{}).Count(&stats.TotalGroups)
+	c.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
+	c.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
+
+	respondJson(w, http.StatusOK, stats)
+}
+
+func (c *Context) groupsGreeted(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+
+	var results []map[string]interface{}
+	db := c.db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
+
+	if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+		return;
+	}
+
+	respondJson(w, http.StatusOK, results)
+}
+
 func listen(db *gorm.DB, listen string, serve_static string) {
 	ctx := Context{db}
 
@@ -532,10 +565,11 @@ func listen(db *gorm.DB, listen string, serve_static string) {
 	r.Use(middleware.Timeout(10 * time.Second))
 
 	r.Route("/v1", func (r chi.Router) {
-		//r.Get("/stats", ctx.getStats)
+		r.Get("/stats", ctx.getStats)
 
 		r.Route("/groups", func (r chi.Router) {
-			r.Get("/search", ctx.findGroup)
+			r.Get("/search", ctx.groupsFind)
+			r.Get("/greeted", ctx.groupsGreeted)
 			//r.Get("/{id}", ctx.getGroup)
 		})
 		r.Route("/prods", func (r chi.Router) {
@@ -547,9 +581,7 @@ func listen(db *gorm.DB, listen string, serve_static string) {
 		})
 
 		r.Route("/greets", func (r chi.Router) {
-
 			r.Post("/", ctx.greetsCreate)
-
 			r.Route("/{id}", func (r chi.Router) {
 				//r.Get("", ctx.greetsGet)
 				//r.Patch("", ctx.greetsUpdate)
