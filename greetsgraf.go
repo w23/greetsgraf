@@ -294,13 +294,39 @@ func (c *Context) findGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	const limit = 10
+
 	var groups []Group
-	db := c.db.Table("groups").Joins("INNER JOIN groups_fts ON groups_fts.id = groups.id").Where("groups_fts MATCH ?", name).Order("rank").Limit(10).Find(&groups)
+	db := c.db.Table("groups").Joins("INNER JOIN groups_fts ON groups_fts.id = groups.id").Where("groups_fts MATCH ?", name).Order("rank").Limit(limit).Find(&groups)
 	if db.Error == gorm.ErrRecordNotFound {
 		respondJson(w, http.StatusNotFound, struct{}{})
 	} else if db.Error != nil {
 		respondErrJson(w, http.StatusInternalServerError, db.Error)
 	} else {
+		if len(groups) < limit {
+			var like_groups []Group
+			c.db.Limit(limit - len(groups)).Find(&like_groups, "name LIKE ?", "%" + name + "%")
+			for i := range like_groups {
+				gl := &like_groups[i]
+				found := false
+				for j := range groups {
+					if groups[j].ID == gl.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					groups = append(groups, *gl)
+				}
+			}
+		}
+
+		for i := range groups {
+			g := &groups[i]
+			prods_count := c.db.Model(g).Association("Prods").Count()
+			log.Printf("Group %+v prods: %+v", g.Name, prods_count)
+		}
+
 		respondJson(w, http.StatusOK, &groups)
 	}
 }
@@ -315,13 +341,32 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 
 	db := c.db.Table("prods").Joins("INNER JOIN prods_fts ON prods_fts.id = prods.id").Where("prods_fts MATCH ?", name).Order("prods_fts.rank")
 
+	const limit = 10
+
 	var prods []Prod
-	db = db.Preload("Groups").Limit(10).Find(&prods)
+	db = db.Preload("Groups").Limit(limit).Find(&prods)
 	if db.Error == gorm.ErrRecordNotFound {
 		respondJson(w, http.StatusNotFound, struct{}{})
 	} else if db.Error != nil {
 		respondErrJson(w, http.StatusInternalServerError, db.Error)
 	} else {
+		if len(prods) < limit {
+			var like_prods []Prod
+			c.db.Preload("Groups").Limit(limit - len(prods)).Find(&like_prods, "name LIKE ?", "%" + name + "%")
+			for i := range like_prods {
+				gl := &like_prods[i]
+				found := false
+				for j := range prods {
+					if prods[j].ID == gl.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					prods = append(prods, *gl)
+				}
+			}
+		}
 		respondJson(w, http.StatusOK, &prods)
 	}
 }
@@ -516,6 +561,7 @@ func listen(db *gorm.DB, listen string, serve_static string) {
 		})
 	}
 
+	log.Printf("Listening on %+v", listen)
 	log.Fatal(http.ListenAndServe(listen, r))
 }
 
