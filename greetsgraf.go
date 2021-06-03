@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"log"
 	"gorm.io/gorm"
@@ -284,6 +285,11 @@ func respondJson(w http.ResponseWriter, status int, payload interface{}) {
 	w.Write([]byte(response))
 }
 
+func (g *Group) getCounts(db *gorm.DB) {
+	g.ProdsCount = db.Model(g).Association("Prods").Count()
+	db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
+}
+
 type Context struct {
 	db *gorm.DB
 }
@@ -326,9 +332,7 @@ func (c *Context) groupsFind(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for i := range groups {
-			g := &groups[i]
-			g.ProdsCount = c.db.Model(g).Association("Prods").Count()
-			c.db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
+			groups[i].getCounts(c.db)
 		}
 
 		respondJson(w, http.StatusOK, &groups)
@@ -378,11 +382,8 @@ func (c *Context) findProd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Context) prodGet(w http.ResponseWriter, r *http.Request) {
-	pid, err := strconv.Atoi(chi.URLParam(r, "id"))
-	if err != nil {
-		respondErrJson(w, http.StatusBadRequest, err)
-		return
-	}
+	ctx := r.Context()
+	pid := ctx.Value("prod_id")
 
 	var prod Prod
 	db := c.db.Find(&prod, "id = ?", pid)
@@ -463,6 +464,62 @@ func (c *Context) prodGet(w http.ResponseWriter, r *http.Request) {
 
 		respondJson(w, http.StatusOK, response_prod)
 	}
+}
+
+func (c *Context) prodGetGreets(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	prod_id := ctx.Value("prod_id")
+
+	var greets []struct {
+		GreeteeID uint
+		GreeteeName string
+		Reference string
+	}
+
+	db := c.db.Table("greets").Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").Where("greets.prod_id = ?", prod_id).Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Find(&greets)
+
+	if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+		return
+	}
+
+	respondJson(w, http.StatusOK, greets)
+}
+
+func (c *Context) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	group_id := ctx.Value("group_id")
+
+	var greets []Greet
+	db := c.db.Find(&greets, "greetee_id = ?", group_id)
+
+	if db.Error != nil {
+		respondErrJson(w, http.StatusInternalServerError, db.Error)
+		return
+	}
+
+	type ResponseItem struct {
+		Prod Prod
+		Reference string
+	}
+
+	var response []ResponseItem
+
+	for i := range greets {
+		greet := &greets[i]
+		var prod Prod
+		c.db.Find(&prod, "id = ?", greet.ProdID).Association("Groups")
+		c.db.Model(&prod).Association("Groups").Find(&prod.Groups)
+		for j := range prod.Groups {
+			prod.Groups[j].getCounts(c.db)
+		}
+		response = append(response, ResponseItem{
+			Prod: prod,
+			Reference: greet.Reference,
+		})
+	}
+
+	respondJson(w, http.StatusOK, &response)
 }
 
 func (c *Context) greetsCreate(w http.ResponseWriter, r *http.Request) {
@@ -558,6 +615,32 @@ func (c *Context) groupsGreeted(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, results)
 }
 
+func ProdContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		prod_id, err := strconv.Atoi(chi.URLParam(r, "id"))
+		if err != nil {
+			respondErrJson(w, http.StatusBadRequest, err)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "prod_id", prod_id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func GroupContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		group_id, err := strconv.Atoi(chi.URLParam(r, "id"))
+		if err != nil {
+			respondErrJson(w, http.StatusBadRequest, err)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "group_id", group_id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func listen(db *gorm.DB, listen string, serve_static string) {
 	ctx := Context{db}
 
@@ -572,13 +655,18 @@ func listen(db *gorm.DB, listen string, serve_static string) {
 		r.Route("/groups", func (r chi.Router) {
 			r.Get("/search", ctx.groupsFind)
 			r.Get("/greeted", ctx.groupsGreeted)
-			//r.Get("/{id}", ctx.getGroup)
+			r.Route("/{id}", func (r chi.Router) {
+				r.Use(GroupContext)
+				//r.Get("/", ctx.groupGet)
+				r.Get("/greets", ctx.groupGetGreeted)
+			})
 		})
 		r.Route("/prods", func (r chi.Router) {
 			r.Get("/search", ctx.findProd)
 			r.Route("/{id}", func (r chi.Router) {
+				r.Use(ProdContext)
 				r.Get("/", ctx.prodGet)
-				//r.Get("/greets", ctx.prodGetGreets)
+				r.Get("/greets", ctx.prodGetGreets)
 			})
 		})
 
