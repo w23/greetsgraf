@@ -23,6 +23,8 @@ type Group struct {
 	Prods []Prod `gorm:"many2many:group_prods;"`
 	//Greeted []Greet `gorm:"many2many:group_greeted;"`
 	//Greets []Greet `gorm:"many2many:group_greets;"`
+	ProdsCount int64 `gorm:"-"`
+	GreetsCount int64 `gorm:"-"`
 }
 
 type Prod struct {
@@ -325,8 +327,8 @@ func (c *Context) groupsFind(w http.ResponseWriter, r *http.Request) {
 
 		for i := range groups {
 			g := &groups[i]
-			prods_count := c.db.Model(g).Association("Prods").Count()
-			log.Printf("Group %+v prods: %+v", g.Name, prods_count)
+			g.ProdsCount = c.db.Model(g).Association("Prods").Count()
+			c.db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
 		}
 
 		respondJson(w, http.StatusOK, &groups)

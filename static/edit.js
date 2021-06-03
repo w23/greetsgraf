@@ -247,12 +247,11 @@ window.onload = function() {
 						let name = obj.Name;
 						if (obj.Disambiguation) {
 							name += " / " + obj.Disambiguation;
-							desc.push(
-								Tag("span", {class: "group"}, null, [
-									Text(" / " + obj.Disambiguation)
-								])
-							);
+							desc.push(Tag("span", {class: "group"}, " / " + obj.Disambiguation));
 						}
+						desc.push(
+							Tag("span", {class: "group"}, " prods: " + obj.ProdsCount + " greets: " + obj.GreetsCount)
+						);
 						let element = Tag('div', {class: "item-inactive"}, null, desc);
 						suggestions.push({
 							id: obj.ID,
