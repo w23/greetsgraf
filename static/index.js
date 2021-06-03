@@ -86,7 +86,7 @@ window.onload = function() {
 							}
 							groups.push(
 								Tag('a',
-									{href: "https://www.pouet.net/groups.php?which=" + prod['Groups']['ID'],},
+									{href: "https://www.pouet.net/groups.php?which=" + prod['Groups'][j]['ID'],},
 									prod['Groups'][j]['Name'])
 							);
 						}
