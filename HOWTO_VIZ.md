@@ -1,6 +1,6 @@
-# How to visualise locally the Greet Graf
+# How to visualize the Greets Graf locally 
 
-This is a simple tuto that try to explain how to use Gephi to visualise the Greet Graf.
+This is a simple tutorial that tries to explain how to use Gephi to visualize the Greets Graf.
 
 # Get Gephi
 
@@ -13,7 +13,7 @@ The history and latest version are available here : https://greetsgraf.jetlag.gr
 # Import the GreetGraph to Gephi
 
 - Open Gephi and create a **New Project**
-- Go to **File** >> \*\*
+- Go to **File** >> Import Database >> Edge List...
   !['./imgs/HOWTO_01.png'](./imgs/HOWTO_01.png)
 
 - Configure like this
@@ -52,6 +52,6 @@ It should result to this
 
 !['./imgs/HOWTO_05.png'](./imgs/HOWTO_05.png)
 
-# Exemple with sime time spend on it
+# Example with some time spent on it
 
 !['./imgs/greetsgraf_2021-06-13-15-32.png'](./imgs/greetsgraf_2021-06-13-15-32.png)
