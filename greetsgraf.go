@@ -221,35 +221,13 @@ func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	{
-		tx := c.db.Begin()
-		defer tx.Rollback()
-
-		var prod Prod
-		if err := tx.Find(&prod, "id = ?", body.ProdId).Error; err != nil {
-			// TODO status not found if errrecordnotfound
-			respondErrJson(w, http.StatusBadRequest, err)
-			return
-		}
-
-		greet := Greet{
-			Reference: body.Note,
-			GreeteeID: body.GroupId,
-		}
-
-		if err := tx.Model(&prod).Association("Greets").Append(&greet); err != nil {
-			// TODO what errors might be here?
-			respondErrJson(w, http.StatusBadRequest, err)
-			return
-		}
-
-		if err := tx.Commit().Error; err != nil {
-			// TODO what errors might be here?
-			respondErrJson(w, http.StatusInternalServerError, err)
-			return
-		}
-		respondJson(w, http.StatusOK, struct{ ID uint }{greet.ID})
+	id, err := c.Greet(body.ProdId, body.GroupId, body.Note)
+	if err != nil {
+		respondErrJson(w, http.StatusInternalServerError, err)
+		return
 	}
+
+	respondJson(w, http.StatusOK, struct{ ID uint }{id})
 }
 
 func (c *Database) greetsDelete(w http.ResponseWriter, r *http.Request) {
@@ -259,31 +237,21 @@ func (c *Database) greetsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := c.db.Unscoped().Delete(&Greet{}, "id = ?", greet_id)
-	if db.Error == gorm.ErrRecordNotFound {
-		respondJson(w, http.StatusNotFound, struct{}{})
-	} else if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
-	} else {
-		respondJson(w, http.StatusOK, struct{ Rows int64 }{db.RowsAffected})
+	removed, err := c.DeleteGreet(uint(greet_id))
+	if err != nil {
+		respondErrJson(w, http.StatusInternalServerError, err)
+		return
 	}
+
+	if !removed {
+		respondJson(w, http.StatusNotFound, struct{}{})
+	}
+
+	respondJson(w, http.StatusOK, struct{}{})
 }
 
 func (c *Database) getStats(w http.ResponseWriter, r *http.Request) {
-	var stats struct {
-		TotalGreets     int64
-		TotalProds      int64
-		TotalGroups     int64
-		ProdsWithGreets int64
-		GreetedGroups   int64
-	}
-
-	c.db.Model(Greet{}).Count(&stats.TotalGreets)
-	c.db.Model(Prod{}).Count(&stats.TotalProds)
-	c.db.Model(Group{}).Count(&stats.TotalGroups)
-	c.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
-	c.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
-
+	stats := c.GetStats()
 	respondJson(w, http.StatusOK, stats)
 }
 
@@ -291,11 +259,10 @@ func (c *Database) groupsGreeted(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	limit, _ := strconv.Atoi(query.Get("limit"))
 
-	var results []map[string]interface{}
-	db := c.db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
+	results, err := c.GetMostGreetedGroups(limit)
 
-	if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	if err != nil {
+		respondErrJson(w, http.StatusInternalServerError, err)
 		return
 	}
 

@@ -384,3 +384,75 @@ func (db *Database) GetGroupGreets(groupID any) ([]GroupGreet, error) {
 
 	return greets, nil
 }
+
+type DatabaseStats struct {
+	TotalGreets     int64
+	TotalProds      int64
+	TotalGroups     int64
+	ProdsWithGreets int64
+	GreetedGroups   int64
+}
+
+func (db *Database) GetStats() DatabaseStats {
+	var stats DatabaseStats
+	db.db.Model(Greet{}).Count(&stats.TotalGreets)
+	db.db.Model(Prod{}).Count(&stats.TotalProds)
+	db.db.Model(Group{}).Count(&stats.TotalGroups)
+	db.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
+	db.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
+	return stats
+}
+
+func (db *Database) Greet(prodID uint, groupID uint, note string) (uint, error) {
+	tx := db.db.Begin()
+	defer tx.Rollback()
+
+	var prod Prod
+	if err := tx.Find(&prod, "id = ?", prodID).Error; err != nil {
+		// TODO status not found if errrecordnotfound
+		return 0, fmt.Errorf("find prod id=%v: %w", prodID, err)
+	}
+
+	greet := Greet{
+		Reference: note,
+		GreeteeID: groupID,
+	}
+
+	if err := tx.Model(&prod).Association("Greets").Append(&greet); err != nil {
+		// TODO what errors might be here?
+		return 0, fmt.Errorf("associate greets: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		// TODO what errors might be here?
+		return 0, fmt.Errorf("tx commit: %w", err)
+	}
+
+	return greet.ID, nil
+}
+
+func (db *Database) DeleteGreet(greetID uint) (bool, error) {
+	query := db.db.Unscoped().Delete(&Greet{}, "id = ?", greetID)
+	if query.Error == gorm.ErrRecordNotFound {
+		return false, nil
+	} else if query.Error != nil {
+		return false, fmt.Errorf("delete greet=%u: %w", greetID, query.Error)
+	}
+
+	if query.RowsAffected == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (db *Database) GetMostGreetedGroups(limit int) ([]map[string]any, error) {
+	var results []map[string]any
+	query := db.db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
+
+	if query.Error != nil {
+		return []map[string]any{}, fmt.Errorf("get most %d greeted groups: %w", limit, query.Error)
+	}
+
+	return results, nil
+}
