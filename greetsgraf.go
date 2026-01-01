@@ -63,15 +63,6 @@ func respondJson(w http.ResponseWriter, status int, payload interface{}) {
 	w.Write([]byte(response))
 }
 
-func (g *Group) getCounts(db *gorm.DB) {
-	g.ProdsCount = db.Model(g).Association("Prods").Count()
-	db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
-}
-
-type Database struct {
-	db *gorm.DB
-}
-
 func (c *Database) groupsFind(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	name := query.Get("name")
@@ -82,7 +73,8 @@ func (c *Database) groupsFind(w http.ResponseWriter, r *http.Request) {
 
 	groups, err := c.FindGroups(name)
 	if err != nil {
-		respondJson(w, http.StatusOK, []int{})
+		// TODO proper error status
+		respondJson(w, http.StatusInternalServerError, []int{})
 		return
 	}
 
@@ -97,123 +89,98 @@ func (c *Database) findProd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := c.db.Table("prods").Joins("INNER JOIN prods_fts ON prods_fts.id = prods.id").Where("prods_fts MATCH ?", name).Order("prods_fts.rank")
-
-	const limit = 10
-
-	var prods []Prod
-	db = db.Preload("Groups").Limit(limit).Find(&prods)
-	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
-	//if db.Error == gorm.ErrRecordNotFound {
-	// respondJson(w, http.StatusNotFound, struct{}{})
-	// } else if db.Error != nil {
-	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
-	//} else
-	{
-		if len(prods) < limit {
-			var like_prods []Prod
-			c.db.Preload("Groups").Limit(limit-len(prods)).Find(&like_prods, "name LIKE ?", "%"+name+"%")
-			for i := range like_prods {
-				gl := &like_prods[i]
-				found := false
-				for j := range prods {
-					if prods[j].ID == gl.ID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					prods = append(prods, *gl)
-				}
-			}
-		}
-		respondJson(w, http.StatusOK, &prods)
+	prods, err := c.FindProds(name)
+	if err != nil {
+		// TODO proper error status
+		respondJson(w, http.StatusInternalServerError, []int{})
+		return
 	}
+
+	respondJson(w, http.StatusOK, &prods)
 }
 
 func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	pid := ctx.Value("prod_id")
 
-	var prod Prod
-	db := c.db.Find(&prod, "id = ?", pid)
-	if db.Error == gorm.ErrRecordNotFound {
-		respondJson(w, http.StatusNotFound, struct{}{})
-	} else if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
-	} else {
-		c.db.Model(&prod).Association("Groups").Find(&prod.Groups)
-		c.db.Model(&prod).Association("Greets").Find(&prod.Greets)
+	prod, err := c.GetProd(pid)
+	if err != nil {
+		// TODO proper error status
+		respondJson(w, http.StatusInternalServerError, struct{}{})
+		return
+	}
 
-		// TODO maybe it's better done through a custom marshaller ...
-		type ResponseGroup struct {
-			ID             uint
-			Name           string
-			Disambiguation string
+	// TODO maybe it's better done through a custom marshaller ...
+	type ResponseGroup struct {
+		ID             uint
+		Name           string
+		Disambiguation string
+	}
+
+	type ResponseGreet struct {
+		ID    uint
+		Group ResponseGroup
+		Note  string
+	}
+
+	response_prod := struct {
+		ID         uint
+		Name       string
+		Year       int
+		Month      int
+		Day        int
+		Video      string
+		Rank       int
+		VoteUp     int
+		VotePig    int
+		VoteDown   int
+		Demozoo    int
+		Screenshot string
+		Groups     []ResponseGroup
+		Greets     []ResponseGreet
+	}{
+		ID:         prod.ID,
+		Name:       prod.Name,
+		Year:       prod.Year,
+		Month:      prod.Month,
+		Day:        prod.Day,
+		Video:      prod.Video,
+		Rank:       prod.Rank,
+		VoteUp:     prod.VoteUp,
+		VotePig:    prod.VotePig,
+		VoteDown:   prod.VoteDown,
+		Demozoo:    prod.Demozoo,
+		Screenshot: prod.Screenshot,
+	}
+
+	for i, _ := range prod.Groups {
+		group := &prod.Groups[i]
+		response_prod.Groups = append(response_prod.Groups, ResponseGroup{
+			ID:             group.ID,
+			Name:           group.Name,
+			Disambiguation: group.Disambiguation,
+		})
+	}
+
+	for i, _ := range prod.Greets {
+		greet := &prod.Greets[i]
+		group, err := c.GetGroup(greet.GreeteeID)
+		if err != nil {
+			log.Println(err)
+			continue
 		}
-
-		type ResponseGreet struct {
-			ID    uint
-			Group ResponseGroup
-			Note  string
-		}
-
-		response_prod := struct {
-			ID         uint
-			Name       string
-			Year       int
-			Month      int
-			Day        int
-			Video      string
-			Rank       int
-			VoteUp     int
-			VotePig    int
-			VoteDown   int
-			Demozoo    int
-			Screenshot string
-			Groups     []ResponseGroup
-			Greets     []ResponseGreet
-		}{
-			ID:         prod.ID,
-			Name:       prod.Name,
-			Year:       prod.Year,
-			Month:      prod.Month,
-			Day:        prod.Day,
-			Video:      prod.Video,
-			Rank:       prod.Rank,
-			VoteUp:     prod.VoteUp,
-			VotePig:    prod.VotePig,
-			VoteDown:   prod.VoteDown,
-			Demozoo:    prod.Demozoo,
-			Screenshot: prod.Screenshot,
-		}
-
-		for i, _ := range prod.Groups {
-			group := &prod.Groups[i]
-			response_prod.Groups = append(response_prod.Groups, ResponseGroup{
+		response_prod.Greets = append(response_prod.Greets, ResponseGreet{
+			ID:   greet.ID,
+			Note: greet.Reference,
+			Group: ResponseGroup{
 				ID:             group.ID,
 				Name:           group.Name,
 				Disambiguation: group.Disambiguation,
-			})
-		}
-
-		for i, _ := range prod.Greets {
-			greet := &prod.Greets[i]
-			var group Group
-			c.db.Find(&group, "ID = ?", greet.GreeteeID)
-			response_prod.Greets = append(response_prod.Greets, ResponseGreet{
-				ID:   greet.ID,
-				Note: greet.Reference,
-				Group: ResponseGroup{
-					ID:             group.ID,
-					Name:           group.Name,
-					Disambiguation: group.Disambiguation,
-				},
-			})
-		}
-
-		respondJson(w, http.StatusOK, response_prod)
+			},
+		})
 	}
+
+	respondJson(w, http.StatusOK, response_prod)
 }
 
 func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -47,6 +48,10 @@ type Greet struct {
 	// ??? GroupName string
 	ProdID    uint `gorm:"uniqueIndex:greets_prod_group"`
 	GreeteeID uint `gorm:"uniqueIndex:greets_prod_group"` //;many2many:group_greeted;"`
+}
+
+type Database struct {
+	db *gorm.DB
 }
 
 func DatabaseOpen(datafile string) (db *gorm.DB, err error) {
@@ -262,4 +267,71 @@ func (db *Database) FindGroups(name string) ([]Group, error) {
 	}
 
 	return groups, nil
+}
+
+func (db *Database) FindProds(name string) ([]Prod, error) {
+	query := db.db.Table("prods").Joins("INNER JOIN prods_fts ON prods_fts.id = prods.id").Where("prods_fts MATCH ?", name).Order("prods_fts.rank")
+
+	const limit = 10
+
+	var prods []Prod
+	query =query.Preload("Groups").Limit(limit).Find(&prods)
+	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
+	//if db.Error == gorm.ErrRecordNotFound {
+	// respondJson(w, http.StatusNotFound, struct{}{})
+	// } else if db.Error != nil {
+	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
+	//} else
+	if len(prods) < limit {
+		var like_prods []Prod
+		db.db.Preload("Groups").Limit(limit-len(prods)).Find(&like_prods, "name LIKE ?", "%"+name+"%")
+		for i := range like_prods {
+			gl := &like_prods[i]
+			found := false
+			for j := range prods {
+				if prods[j].ID == gl.ID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				prods = append(prods, *gl)
+			}
+		}
+	}
+
+	return prods, nil
+}
+
+func (g *Group) getCounts(db *gorm.DB) {
+	g.ProdsCount = db.Model(g).Association("Prods").Count()
+	db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
+}
+
+// TODO proper type for pid
+func (db *Database) GetProd(pid any) (Prod, error) {
+	var prod Prod
+	query := db.db.Find(&prod, "id = ?", pid)
+	if query.Error == gorm.ErrRecordNotFound {
+		return prod, fmt.Errorf("not found")
+	} else if query.Error != nil {
+		return prod, fmt.Errorf("unknown db error: %w", query.Error)
+	}
+
+	db.db.Model(&prod).Association("Groups").Find(&prod.Groups)
+	db.db.Model(&prod).Association("Greets").Find(&prod.Greets)
+
+	return prod, nil
+}
+
+// TODO proper type for groupID
+func (db *Database) GetGroup(groupID any) (Group, error) {
+	var group Group
+	query := db.db.Find(&group, "ID = ?", groupID)
+
+	if query.Error != nil {
+		return group, fmt.Errorf("find group id=%u: %w", groupID, query.Error)
+	}
+
+	return group, nil
 }
