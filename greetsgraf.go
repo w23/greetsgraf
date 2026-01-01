@@ -187,16 +187,9 @@ func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	prod_id := ctx.Value("prod_id")
 
-	var greets []struct {
-		GreeteeID   uint
-		GreeteeName string
-		Reference   string
-	}
-
-	db := c.db.Table("greets").Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").Where("greets.prod_id = ?", prod_id).Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Find(&greets)
-
-	if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	greets, err := c.GetProdGreets(prod_id)
+	if err != nil {
+		respondErrJson(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -207,36 +200,13 @@ func (c *Database) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	group_id := ctx.Value("group_id")
 
-	var greets []Greet
-	db := c.db.Find(&greets, "greetee_id = ?", group_id)
-
-	if db.Error != nil {
-		respondErrJson(w, http.StatusInternalServerError, db.Error)
+	greets, err := c.GetGroupGreets(group_id)
+	if err != nil {
+		respondErrJson(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	type ResponseItem struct {
-		Prod      Prod
-		Reference string
-	}
-
-	var response []ResponseItem
-
-	for i := range greets {
-		greet := &greets[i]
-		var prod Prod
-		c.db.Find(&prod, "id = ?", greet.ProdID).Association("Groups")
-		c.db.Model(&prod).Association("Groups").Find(&prod.Groups)
-		for j := range prod.Groups {
-			prod.Groups[j].getCounts(c.db)
-		}
-		response = append(response, ResponseItem{
-			Prod:      prod,
-			Reference: greet.Reference,
-		})
-	}
-
-	respondJson(w, http.StatusOK, &response)
+	respondJson(w, http.StatusOK, &greets)
 }
 
 func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {

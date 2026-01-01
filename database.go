@@ -50,6 +50,17 @@ type Greet struct {
 	GreeteeID uint `gorm:"uniqueIndex:greets_prod_group"` //;many2many:group_greeted;"`
 }
 
+type ProdGreet struct {
+	GreeteeID   uint
+	GreeteeName string
+	Reference   string
+}
+
+type GroupGreet struct {
+	Prod      Prod
+	Reference string
+}
+
 type Database struct {
 	db *gorm.DB
 }
@@ -334,4 +345,42 @@ func (db *Database) GetGroup(groupID any) (Group, error) {
 	}
 
 	return group, nil
+}
+
+func (db *Database) GetProdGreets(prodID any) ([]ProdGreet, error) {
+	var greets []ProdGreet
+	query := db.db.Table("greets").Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").Where("greets.prod_id = ?", prodID).Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Find(&greets)
+
+	if query.Error != nil {
+		return []ProdGreet{}, fmt.Errorf("get greets for prod=%v: %w", prodID, query.Error)
+	}
+
+	return greets, nil
+}
+
+func (db *Database) GetGroupGreets(groupID any) ([]GroupGreet, error) {
+	var raw_greets []Greet
+	query := db.db.Find(&raw_greets, "greetee_id = ?", groupID)
+
+	if query.Error != nil {
+		return []GroupGreet{}, fmt.Errorf("get greets for greetee_id=%v: %w", groupID, query.Error)
+	}
+
+	var greets []GroupGreet
+
+	for i := range raw_greets {
+		raw_greet := &raw_greets[i]
+		var prod Prod
+		db.db.Find(&prod, "id = ?", raw_greet.ProdID).Association("Groups")
+		db.db.Model(&prod).Association("Groups").Find(&prod.Groups)
+		for j := range prod.Groups {
+			prod.Groups[j].getCounts(db.db)
+		}
+		greets = append(greets, GroupGreet{
+			Prod:      prod,
+			Reference: raw_greet.Reference,
+		})
+	}
+
+	return greets, nil
 }
