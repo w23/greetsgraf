@@ -275,7 +275,7 @@ func (db *Database) FindProds(name string) ([]Prod, error) {
 	const limit = 10
 
 	var prods []Prod
-	query =query.Preload("Groups").Limit(limit).Find(&prods)
+	query = query.Preload("Groups").Limit(limit).Find(&prods)
 	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
 	//if db.Error == gorm.ErrRecordNotFound {
 	// respondJson(w, http.StatusNotFound, struct{}{})
