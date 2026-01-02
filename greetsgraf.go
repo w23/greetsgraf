@@ -1,35 +1,9 @@
 package main
 
 import (
-	"compress/gzip"
-	"encoding/json"
 	"flag"
 	"log"
-	"os"
 )
-
-func readJsonGz(filename string) (map[string]interface{}, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Printf("Error opening file %s: %v", filename, err)
-		return nil, err
-	}
-
-	gz, err := gzip.NewReader(file)
-	if err != nil {
-		log.Printf("Error unpacking file %s: %v", filename, err)
-		return nil, err
-	}
-
-	var value map[string]interface{}
-	err = json.NewDecoder(gz).Decode(&value)
-	if err != nil {
-		log.Printf("Error decoding json from file %s: %v", filename, err)
-		return nil, err
-	}
-
-	return value, err
-}
 
 type Args struct {
 	db           string
@@ -72,13 +46,13 @@ func main() {
 	}
 
 	if args.create {
-		create(db, args.pouet_prods, args.pouet_groups)
-		buildIndex(db)
+		db.ImportPouet(args.pouet_prods, args.pouet_groups)
+		db.BuildIndex()
 	} else if args.index {
-		buildIndex(db)
+		db.BuildIndex()
 	}
 
 	if args.serve {
-		listen(Database{db}, args.listen, args.static)
+		listen(db, args.listen, args.static)
 	}
 }

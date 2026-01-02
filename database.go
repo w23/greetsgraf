@@ -1,9 +1,12 @@
 package main
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -65,36 +68,87 @@ type Database struct {
 	db *gorm.DB
 }
 
-func DatabaseOpen(datafile string) (db *gorm.DB, err error) {
-	db, err = gorm.Open(sqlite.Open(datafile), &gorm.Config{})
-	return
+func DatabaseOpen(datafile string) (Database, error) {
+	db, err := gorm.Open(sqlite.Open(datafile), &gorm.Config{})
+
+	if err != nil {
+		return Database{nil}, fmt.Errorf("open database file %s: %w", datafile, err)
+	}
+
+	return Database{db}, err
 }
 
-func buildIndex(db *gorm.DB) {
-	if err := db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)").Error; err != nil {
+func (db *Database) BuildIndex() {
+	if err := db.db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)").Error; err != nil {
 		log.Fatalf("Failed to create FTS index for groups: %+v", err)
 	}
-	if err := db.Exec("INSERT INTO groups_fts (name, id) SELECT name, id FROM groups").Error; err != nil {
+	if err := db.db.Exec("INSERT INTO groups_fts (name, id) SELECT name, id FROM groups").Error; err != nil {
 		log.Fatalf("Failed to populate FTS index for groups: %+v", err)
 	}
 
-	if err := db.Exec("CREATE VIRTUAL TABLE prods_fts USING fts5(name, id)").Error; err != nil {
+	if err := db.db.Exec("CREATE VIRTUAL TABLE prods_fts USING fts5(name, id)").Error; err != nil {
 		log.Fatalf("Failed to create FTS index for prods: %+v", err)
 	}
-	if err := db.Exec("INSERT INTO prods_fts (name, id) SELECT name, id FROM prods").Error; err != nil {
+	if err := db.db.Exec("INSERT INTO prods_fts (name, id) SELECT name, id FROM prods").Error; err != nil {
 		log.Fatalf("Failed to populate FTS index for prods: %+v", err)
 	}
 }
 
-func create(db *gorm.DB, prodsfile string, groupsfile string) {
+func readJsonGz(filename string) (map[string]interface{}, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Printf("Error opening file %s: %v", filename, err)
+		return nil, err
+	}
+
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		log.Printf("Error unpacking file %s: %v", filename, err)
+		return nil, err
+	}
+
+	var value map[string]interface{}
+	err = json.NewDecoder(gz).Decode(&value)
+	if err != nil {
+		log.Printf("Error decoding json from file %s: %v", filename, err)
+		return nil, err
+	}
+
+	return value, err
+}
+
+// parsePouetDate returns optional year and month of the prod
+func parsePouetDate(dateString string) (int, int, error) {
+	// All dates are expected to be in the YYYY-MM-DD format
+	if len(dateString) < 10 {
+		return 0, 0, fmt.Errorf("date \"%s\" is invalid: expected YYYY-MM-DD format", dateString)
+	}
+
+	// Try full year-month first
+	date, err := time.Parse("2006-01-02", dateString)
+	if err == nil {
+		return int(date.Year()), int(date.Month()), nil
+	}
+
+	// Try year only next
+	// There are a bunch of dates like `1992-00-15` (with `00-15` exactly, why?), which mean only year, not month
+	date, err = time.Parse("2006", dateString[:4])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse date \"%s\": %w", dateString, err)
+	}
+
+	return int(date.Year()), 0, nil
+}
+
+func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 	if prodsfile == "" || groupsfile == "" {
 		flag.Usage()
 		log.Fatal("When creating a new db, pouet data dumps are needed\n")
 	}
 
-	db.AutoMigrate(&Group{})
-	db.AutoMigrate(&Prod{})
-	db.AutoMigrate(&Greet{})
+	db.db.AutoMigrate(&Group{})
+	db.db.AutoMigrate(&Prod{})
+	db.db.AutoMigrate(&Greet{})
 
 	log.Printf("Importing groups...")
 
@@ -104,7 +158,7 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 			log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
 		}
 
-		tx := db.Begin()
+		tx := db.db.Begin()
 
 		groups_array := (groups["groups"]).([]interface{})
 		for index, _ := range groups_array {
@@ -144,7 +198,7 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 		prods_array := (prods["prods"]).([]interface{})
 		num_prods := len(prods_array)
 
-		tx := db.Begin()
+		tx := db.db.Begin()
 		for i, iprod := range prods_array {
 			prod := iprod.(map[string]interface{})
 			pid, err := strconv.Atoi(prod["id"].(string))
@@ -156,11 +210,11 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 			name := prod["name"].(string)
 			jdate, found := prod["releaseDate"]
 
-			var date time.Time
+			var year, month int
 
 			if found && jdate != nil {
 				date_string := jdate.(string)
-				date, err = time.Parse("2006-01-02", date_string)
+				year, month, err = parsePouetDate(date_string)
 				// TODO: for missing/invalid dates try to parse manually, or refer to party_year
 				if err != nil {
 					log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], date_string, err)
@@ -205,9 +259,9 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 			dbprod := Prod{
 				ID:         uint(pid),
 				Name:       name,
-				Year:       date.Year(),
-				Month:      int(date.Month()),
-				Day:        date.Day(),
+				Year:       year,
+				Month:      month,
+				Day:        0,
 				Rank:       rank,
 				VoteUp:     voteup,
 				VoteDown:   votedown,
@@ -436,7 +490,7 @@ func (db *Database) DeleteGreet(greetID uint) (bool, error) {
 	if query.Error == gorm.ErrRecordNotFound {
 		return false, nil
 	} else if query.Error != nil {
-		return false, fmt.Errorf("delete greet=%u: %w", greetID, query.Error)
+		return false, fmt.Errorf("delete greet=%d: %w", greetID, query.Error)
 	}
 
 	if query.RowsAffected == 0 {
