@@ -8,18 +8,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupDatabase(t *testing.T, name string) Database {
+func setupPouetDatabase(t *testing.T, name string) Pouet {
 	t.Helper()
 
-	//db, err := DatabaseOpen("greetsgraf.db")
-	db, err := DatabaseOpen(fmt.Sprintf("%s/%s.db", t.TempDir(), name))
+	pouetDB, err := PouetOpen(fmt.Sprintf("%s/%s.db", t.TempDir(), name))
 	require.NoError(t, err)
 
 	// Load initial test data used for all tests
 	// Use pouet.sh script to update/populate these files
-	db.ImportPouet("test/pouet-prods.json.gz", "test/pouet-groups.json.gz")
+	pouetDB.ImportPouet("test/pouet-prods.json.gz", "test/pouet-groups.json.gz")
 
-	return db
+	return pouetDB
 }
 
 const debrisID = uint(30244)
@@ -30,7 +29,7 @@ const rgbaID = uint(697)
 const tbcID = uint(1623)
 
 func TestPouetImport(t *testing.T) {
-	db := setupDatabase(t, "pouet-import")
+	db := setupPouetDatabase(t, "pouet-import")
 
 	// Check that basic loading went fine
 	t.Run("DebrisWasImported", func(t *testing.T) {

@@ -36,7 +36,7 @@ func respondJson(w http.ResponseWriter, status int, payload interface{}) {
 	w.Write([]byte(response))
 }
 
-func (c *Database) groupsFind(w http.ResponseWriter, r *http.Request) {
+func (p *Pouet) groupsFind(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	name := query.Get("name")
 	if name == "" {
@@ -44,7 +44,7 @@ func (c *Database) groupsFind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups, err := c.FindGroups(name)
+	groups, err := p.FindGroups(name)
 	if err != nil {
 		// TODO proper error status
 		respondJson(w, http.StatusInternalServerError, []int{})
@@ -54,7 +54,7 @@ func (c *Database) groupsFind(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, &groups)
 }
 
-func (c *Database) findProd(w http.ResponseWriter, r *http.Request) {
+func (p *Pouet) findProd(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	name := query.Get("name")
 	if name == "" {
@@ -62,7 +62,7 @@ func (c *Database) findProd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prods, err := c.FindProds(name)
+	prods, err := p.FindProds(name)
 	if err != nil {
 		// TODO proper error status
 		respondJson(w, http.StatusInternalServerError, []int{})
@@ -72,18 +72,16 @@ func (c *Database) findProd(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, &prods)
 }
 
-func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
+func (p *Pouet) prodGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	pid := ctx.Value("prod_id")
 
-	prod, err := c.GetProd(pid)
+	prod, err := p.GetProd(pid)
 	if err != nil {
-		// TODO proper error status
 		respondJson(w, http.StatusInternalServerError, struct{}{})
 		return
 	}
 
-	// TODO maybe it's better done through a custom marshaller ...
 	type ResponseGroup struct {
 		ID             uint
 		Name           string
@@ -94,6 +92,12 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		ID    uint
 		Group ResponseGroup
 		Note  string
+	}
+
+	type ResponseGroupWithID struct {
+		ID             uint
+		Name           string
+		Disambiguation string
 	}
 
 	response_prod := struct {
@@ -126,7 +130,7 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		Screenshot: prod.Screenshot,
 	}
 
-	for i, _ := range prod.Groups {
+	for i := range prod.Groups {
 		group := &prod.Groups[i]
 		response_prod.Groups = append(response_prod.Groups, ResponseGroup{
 			ID:             group.ID,
@@ -135,32 +139,30 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	for i, _ := range prod.Greets {
-		greet := &prod.Greets[i]
-		group, err := c.GetGroup(greet.GreeteeID)
-		if err != nil {
-			log.Println(err)
-			continue
+	greets, err := p.GetProdGreets(r, pid)
+	if err != nil {
+		log.Println(err)
+	} else {
+		for _, greet := range greets {
+			response_prod.Greets = append(response_prod.Greets, ResponseGreet{
+				Note: greet.Reference,
+				Group: ResponseGroup{
+					ID:             greet.GreeteeID,
+					Name:           greet.GreeteeName,
+					Disambiguation: "",
+				},
+			})
 		}
-		response_prod.Greets = append(response_prod.Greets, ResponseGreet{
-			ID:   greet.ID,
-			Note: greet.Reference,
-			Group: ResponseGroup{
-				ID:             group.ID,
-				Name:           group.Name,
-				Disambiguation: group.Disambiguation,
-			},
-		})
 	}
 
 	respondJson(w, http.StatusOK, response_prod)
 }
 
-func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
+func (p *Pouet) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	prod_id := ctx.Value("prod_id")
 
-	greets, err := c.GetProdGreets(prod_id)
+	greets, err := p.GetProdGreets(r, prod_id)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -169,11 +171,11 @@ func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, greets)
 }
 
-func (c *Database) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
+func (p *Pouet) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	group_id := ctx.Value("group_id")
 
-	greets, err := c.GetGroupGreets(group_id)
+	greets, err := p.GetGroupGreets(r, group_id)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -182,7 +184,7 @@ func (c *Database) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, &greets)
 }
 
-func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {
+func (g *Greets) greetsCreate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ProdId  uint
 		GroupId uint
@@ -194,7 +196,7 @@ func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := c.Greet(body.ProdId, body.GroupId, body.Note)
+	id, err := g.Greet(body.ProdId, body.GroupId, body.Note)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -203,14 +205,14 @@ func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, struct{ ID uint }{id})
 }
 
-func (c *Database) greetsDelete(w http.ResponseWriter, r *http.Request) {
+func (g *Greets) greetsDelete(w http.ResponseWriter, r *http.Request) {
 	greet_id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		respondErrJson(w, http.StatusBadRequest, err)
 		return
 	}
 
-	removed, err := c.DeleteGreet(uint(greet_id))
+	removed, err := g.DeleteGreet(uint(greet_id))
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -223,16 +225,16 @@ func (c *Database) greetsDelete(w http.ResponseWriter, r *http.Request) {
 	respondJson(w, http.StatusOK, struct{}{})
 }
 
-func (c *Database) getStats(w http.ResponseWriter, r *http.Request) {
-	stats := c.GetStats()
+func (p *Pouet) getStats(w http.ResponseWriter, r *http.Request) {
+	stats := p.GetStats(r)
 	respondJson(w, http.StatusOK, stats)
 }
 
-func (c *Database) groupsGreeted(w http.ResponseWriter, r *http.Request) {
+func (p *Pouet) groupsGreeted(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	limit, _ := strconv.Atoi(query.Get("limit"))
 
-	results, err := c.GetMostGreetedGroups(limit)
+	results, err := p.GetMostGreetedGroups(r, limit)
 
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
@@ -268,39 +270,46 @@ func GroupContext(next http.Handler) http.Handler {
 	})
 }
 
-func listen(db Database, listen string, serve_static string) {
+func listen(pouetDB *Pouet, greetsDB *Greets, listen string, serve_static string) {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
 	r.Use(middleware.Timeout(10 * time.Second))
 
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), "writableDB", greetsDB)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
+
 	r.Route("/v1", func(r chi.Router) {
-		r.Get("/stats", db.getStats)
+		r.Get("/stats", pouetDB.getStats)
 
 		r.Route("/groups", func(r chi.Router) {
-			r.Get("/search", db.groupsFind)
-			r.Get("/greeted", db.groupsGreeted)
+			r.Get("/search", pouetDB.groupsFind)
+			r.Get("/greeted", pouetDB.groupsGreeted)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Use(GroupContext)
-				//r.Get("/", db.groupGet)
-				r.Get("/greets", db.groupGetGreeted)
+				//r.Get("/", pouetDB.groupGet)
+				r.Get("/greets", pouetDB.groupGetGreeted)
 			})
 		})
 		r.Route("/prods", func(r chi.Router) {
-			r.Get("/search", db.findProd)
+			r.Get("/search", pouetDB.findProd)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Use(ProdContext)
-				r.Get("/", db.prodGet)
-				r.Get("/greets", db.prodGetGreets)
+				r.Get("/", pouetDB.prodGet)
+				r.Get("/greets", pouetDB.prodGetGreets)
 			})
 		})
 
 		r.Route("/greets", func(r chi.Router) {
-			r.Post("/", db.greetsCreate)
+			r.Post("/", greetsDB.greetsCreate)
 			r.Route("/{id}", func(r chi.Router) {
-				//r.Get("", db.greetsGet)
-				//r.Patch("", db.greetsUpdate)
-				r.Delete("/", db.greetsDelete)
+				//r.Get("", greetsDB.greetsGet)
+				//r.Patch("", greetsDB.greetsUpdate)
+				r.Delete("/", greetsDB.greetsDelete)
 			})
 		})
 	})

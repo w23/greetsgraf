@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -15,15 +16,32 @@ import (
 	"gorm.io/gorm"
 )
 
+type ProdGreet struct {
+	GreeteeID   uint
+	GreeteeName string
+	Reference   string
+}
+
+type GroupGreet struct {
+	Prod      Prod
+	Reference string
+}
+
+type DatabaseStats struct {
+	TotalGreets     int64
+	TotalProds      int64
+	TotalGroups     int64
+	ProdsWithGreets int64
+	GreetedGroups   int64
+}
+
 type Group struct {
 	ID             uint   `gorm:"primaryKey"`
 	Name           string `gorm:"index"`
 	Disambiguation string `gorm:"index"`
 	Prods          []Prod `gorm:"many2many:group_prods;"`
-	//Greeted []Greet `gorm:"many2many:group_greeted;"`
-	//Greets []Greet `gorm:"many2many:group_greets;"`
-	ProdsCount  int64 `gorm:"-"`
-	GreetsCount int64 `gorm:"-"`
+	ProdsCount     int64  `gorm:"-"`
+	GreetsCount    int64  `gorm:"-"`
 }
 
 type Prod struct {
@@ -39,46 +57,24 @@ type Prod struct {
 	VoteDown   int
 	Demozoo    int
 	Screenshot string
-	// TODO: credits
-	Groups []Group `gorm:"many2many:group_prods;"`
-	Greets []Greet
+	Groups     []Group `gorm:"many2many:group_prods;"`
 }
 
-type Greet struct {
-	gorm.Model
-	UserID    uint `gorm:"index"`
-	Reference string
-	// ??? GroupName string
-	ProdID    uint `gorm:"uniqueIndex:greets_prod_group"`
-	GreeteeID uint `gorm:"uniqueIndex:greets_prod_group"` //;many2many:group_greeted;"`
-}
-
-type ProdGreet struct {
-	GreeteeID   uint
-	GreeteeName string
-	Reference   string
-}
-
-type GroupGreet struct {
-	Prod      Prod
-	Reference string
-}
-
-type Database struct {
+type Pouet struct {
 	db *gorm.DB
 }
 
-func DatabaseOpen(datafile string) (Database, error) {
+func PouetOpen(datafile string) (Pouet, error) {
 	db, err := gorm.Open(sqlite.Open(datafile), &gorm.Config{})
 
 	if err != nil {
-		return Database{nil}, fmt.Errorf("open database file %s: %w", datafile, err)
+		return Pouet{nil}, fmt.Errorf("open pouet database file %s: %w", datafile, err)
 	}
 
-	return Database{db}, err
+	return Pouet{db}, err
 }
 
-func (db *Database) BuildIndex() {
+func (db *Pouet) BuildIndex() {
 	if err := db.db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)").Error; err != nil {
 		log.Fatalf("Failed to create FTS index for groups: %+v", err)
 	}
@@ -94,53 +90,7 @@ func (db *Database) BuildIndex() {
 	}
 }
 
-func readJsonGz(filename string) (map[string]interface{}, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		log.Printf("Error opening file %s: %v", filename, err)
-		return nil, err
-	}
-
-	gz, err := gzip.NewReader(file)
-	if err != nil {
-		log.Printf("Error unpacking file %s: %v", filename, err)
-		return nil, err
-	}
-
-	var value map[string]interface{}
-	err = json.NewDecoder(gz).Decode(&value)
-	if err != nil {
-		log.Printf("Error decoding json from file %s: %v", filename, err)
-		return nil, err
-	}
-
-	return value, err
-}
-
-// parsePouetDate returns optional year and month of the prod
-func parsePouetDate(dateString string) (int, int, error) {
-	// All dates are expected to be in the YYYY-MM-DD format
-	if len(dateString) < 10 {
-		return 0, 0, fmt.Errorf("date \"%s\" is invalid: expected YYYY-MM-DD format", dateString)
-	}
-
-	// Try full year-month first
-	date, err := time.Parse("2006-01-02", dateString)
-	if err == nil {
-		return int(date.Year()), int(date.Month()), nil
-	}
-
-	// Try year only next
-	// There are a bunch of dates like `1992-00-15` (with `00-15` exactly, why?), which mean only year, not month
-	date, err = time.Parse("2006", dateString[:4])
-	if err != nil {
-		return 0, 0, fmt.Errorf("parse date \"%s\": %w", dateString, err)
-	}
-
-	return int(date.Year()), 0, nil
-}
-
-func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
+func (db *Pouet) ImportPouet(prodsfile string, groupsfile string) {
 	if prodsfile == "" || groupsfile == "" {
 		flag.Usage()
 		log.Fatal("When creating a new db, pouet data dumps are needed\n")
@@ -148,7 +98,6 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 
 	db.db.AutoMigrate(&Group{})
 	db.db.AutoMigrate(&Prod{})
-	db.db.AutoMigrate(&Greet{})
 
 	log.Printf("Importing groups...")
 
@@ -297,7 +246,7 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 	log.Printf("Import done.")
 }
 
-func (db *Database) FindGroups(name string) ([]Group, error) {
+func (db *Pouet) FindGroups(name string) ([]Group, error) {
 	const limit = 10
 
 	var groups []Group
@@ -334,7 +283,7 @@ func (db *Database) FindGroups(name string) ([]Group, error) {
 	return groups, nil
 }
 
-func (db *Database) FindProds(name string) ([]Prod, error) {
+func (db *Pouet) FindProds(name string) ([]Prod, error) {
 	query := db.db.Table("prods").Joins("INNER JOIN prods_fts ON prods_fts.id = prods.id").Where("prods_fts MATCH ?", name).Order("prods_fts.rank")
 
 	const limit = 10
@@ -368,31 +317,23 @@ func (db *Database) FindProds(name string) ([]Prod, error) {
 	return prods, nil
 }
 
-func (g *Group) getCounts(db *gorm.DB) {
-	g.ProdsCount = db.Model(g).Association("Prods").Count()
-	db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
-}
-
-// TODO proper type for pid
-func (db *Database) GetProd(pid any) (Prod, error) {
+func (p *Pouet) GetProd(pid any) (Prod, error) {
 	var prod Prod
-	query := db.db.Find(&prod, "id = ?", pid)
+	query := p.db.Find(&prod, "id = ?", pid)
 	if query.Error == gorm.ErrRecordNotFound {
 		return prod, fmt.Errorf("not found")
 	} else if query.Error != nil {
 		return prod, fmt.Errorf("unknown db error: %w", query.Error)
 	}
 
-	db.db.Model(&prod).Association("Groups").Find(&prod.Groups)
-	db.db.Model(&prod).Association("Greets").Find(&prod.Greets)
+	p.db.Model(&prod).Association("Groups").Find(&prod.Groups)
 
 	return prod, nil
 }
 
-// TODO proper type for groupID
-func (db *Database) GetGroup(groupID any) (Group, error) {
+func (p *Pouet) GetGroup(groupID any) (Group, error) {
 	var group Group
-	query := db.db.Find(&group, "ID = ?", groupID)
+	query := p.db.Find(&group, "ID = ?", groupID)
 
 	if query.Error != nil {
 		return group, fmt.Errorf("find group id=%u: %w", groupID, query.Error)
@@ -401,9 +342,13 @@ func (db *Database) GetGroup(groupID any) (Group, error) {
 	return group, nil
 }
 
-func (db *Database) GetProdGreets(prodID any) ([]ProdGreet, error) {
+func (p *Pouet) GetProdGreets(r *http.Request, prodID any) ([]ProdGreet, error) {
 	var greets []ProdGreet
-	query := db.db.Table("greets").Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").Where("greets.prod_id = ?", prodID).Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Find(&greets)
+	query := r.Context().Value("writableDB").(*Greets).db.Table("greets").
+		Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").
+		Where("greets.prod_id = ?", prodID).
+		Joins("INNER JOIN groups ON groups.id = greets.greetee_id").
+		Find(&greets)
 
 	if query.Error != nil {
 		return []ProdGreet{}, fmt.Errorf("get greets for prod=%v: %w", prodID, query.Error)
@@ -412,9 +357,9 @@ func (db *Database) GetProdGreets(prodID any) ([]ProdGreet, error) {
 	return greets, nil
 }
 
-func (db *Database) GetGroupGreets(groupID any) ([]GroupGreet, error) {
+func (p *Pouet) GetGroupGreets(r *http.Request, groupID any) ([]GroupGreet, error) {
 	var raw_greets []Greet
-	query := db.db.Find(&raw_greets, "greetee_id = ?", groupID)
+	query := r.Context().Value("writableDB").(*Greets).db.Find(&raw_greets, "greetee_id = ?", groupID)
 
 	if query.Error != nil {
 		return []GroupGreet{}, fmt.Errorf("get greets for greetee_id=%v: %w", groupID, query.Error)
@@ -425,10 +370,10 @@ func (db *Database) GetGroupGreets(groupID any) ([]GroupGreet, error) {
 	for i := range raw_greets {
 		raw_greet := &raw_greets[i]
 		var prod Prod
-		db.db.Find(&prod, "id = ?", raw_greet.ProdID).Association("Groups")
-		db.db.Model(&prod).Association("Groups").Find(&prod.Groups)
+		p.db.Find(&prod, "id = ?", raw_greet.ProdID).Association("Groups")
+		p.db.Model(&prod).Association("Groups").Find(&prod.Groups)
 		for j := range prod.Groups {
-			prod.Groups[j].getCounts(db.db)
+			prod.Groups[j].getCounts(p.db)
 		}
 		greets = append(greets, GroupGreet{
 			Prod:      prod,
@@ -439,74 +384,74 @@ func (db *Database) GetGroupGreets(groupID any) ([]GroupGreet, error) {
 	return greets, nil
 }
 
-type DatabaseStats struct {
-	TotalGreets     int64
-	TotalProds      int64
-	TotalGroups     int64
-	ProdsWithGreets int64
-	GreetedGroups   int64
-}
-
-func (db *Database) GetStats() DatabaseStats {
-	var stats DatabaseStats
-	db.db.Model(Greet{}).Count(&stats.TotalGreets)
-	db.db.Model(Prod{}).Count(&stats.TotalProds)
-	db.db.Model(Group{}).Count(&stats.TotalGroups)
-	db.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
-	db.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
-	return stats
-}
-
-func (db *Database) Greet(prodID uint, groupID uint, note string) (uint, error) {
-	tx := db.db.Begin()
-	defer tx.Rollback()
-
-	var prod Prod
-	if err := tx.Find(&prod, "id = ?", prodID).Error; err != nil {
-		// TODO status not found if errrecordnotfound
-		return 0, fmt.Errorf("find prod id=%v: %w", prodID, err)
-	}
-
-	greet := Greet{
-		Reference: note,
-		GreeteeID: groupID,
-	}
-
-	if err := tx.Model(&prod).Association("Greets").Append(&greet); err != nil {
-		// TODO what errors might be here?
-		return 0, fmt.Errorf("associate greets: %w", err)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		// TODO what errors might be here?
-		return 0, fmt.Errorf("tx commit: %w", err)
-	}
-
-	return greet.ID, nil
-}
-
-func (db *Database) DeleteGreet(greetID uint) (bool, error) {
-	query := db.db.Unscoped().Delete(&Greet{}, "id = ?", greetID)
-	if query.Error == gorm.ErrRecordNotFound {
-		return false, nil
-	} else if query.Error != nil {
-		return false, fmt.Errorf("delete greet=%d: %w", greetID, query.Error)
-	}
-
-	if query.RowsAffected == 0 {
-		return false, nil
-	}
-
-	return true, nil
-}
-
-func (db *Database) GetMostGreetedGroups(limit int) ([]map[string]any, error) {
+func (p *Pouet) GetMostGreetedGroups(r *http.Request, limit int) ([]map[string]any, error) {
 	var results []map[string]any
-	query := db.db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
+	query := r.Context().Value("writableDB").(*Greets).db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
 
 	if query.Error != nil {
 		return []map[string]any{}, fmt.Errorf("get most %d greeted groups: %w", limit, query.Error)
 	}
 
 	return results, nil
+}
+
+func (p *Pouet) GetStats(r *http.Request) DatabaseStats {
+	var stats DatabaseStats
+	writableDB := r.Context().Value("writableDB").(*Greets)
+	writableDB.db.Model(Greet{}).Count(&stats.TotalGreets)
+	p.db.Model(Prod{}).Count(&stats.TotalProds)
+	p.db.Model(Group{}).Count(&stats.TotalGroups)
+	writableDB.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
+	writableDB.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
+	return stats
+}
+
+func readJsonGz(filename string) (map[string]interface{}, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Printf("Error opening file %s: %v", filename, err)
+		return nil, err
+	}
+
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		log.Printf("Error unpacking file %s: %v", filename, err)
+		return nil, err
+	}
+
+	var value map[string]interface{}
+	err = json.NewDecoder(gz).Decode(&value)
+	if err != nil {
+		log.Printf("Error decoding json from file %s: %v", filename, err)
+		return nil, err
+	}
+
+	return value, err
+}
+
+func (g *Group) getCounts(db *gorm.DB) {
+	g.ProdsCount = db.Model(g).Association("Prods").Count()
+	db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
+}
+
+func parsePouetDate(dateString string) (int, int, error) {
+	// All dates are expected to be in the YYYY-MM-DD format
+	if len(dateString) < 10 {
+		return 0, 0, fmt.Errorf("date \"%s\" is invalid: expected YYYY-MM-DD format", dateString)
+	}
+
+	// Try full year-month first
+	date, err := time.Parse("2006-01-02", dateString)
+	if err == nil {
+		return int(date.Year()), int(date.Month()), nil
+	}
+
+	// Try year only next
+	// There are a bunch of dates like `1992-00-15` (with `00-15` exactly, why?), which mean only year, not month
+	date, err = time.Parse("2006", dateString[:4])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse date \"%s\": %w", dateString, err)
+	}
+
+	return int(date.Year()), 0, nil
 }
