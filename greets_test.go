@@ -17,7 +17,7 @@ func setupGreetsDatabase(t *testing.T) Greets {
 	require.NoError(t, err)
 	pouetDB.ImportPouet("test/pouet-prods.json.gz", "test/pouet-groups.json.gz")
 
-	greetsDB, err := GreetsOpen(dbPath)
+	greetsDB, err := GreetsOpen(dbPath, &pouetDB)
 	require.NoError(t, err)
 	greetsDB.AutoMigrate()
 

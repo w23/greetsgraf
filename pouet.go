@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -15,25 +14,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
-
-type ProdGreet struct {
-	GreeteeID   uint
-	GreeteeName string
-	Reference   string
-}
-
-type GroupGreet struct {
-	Prod      Prod
-	Reference string
-}
-
-type DatabaseStats struct {
-	TotalGreets     int64
-	TotalProds      int64
-	TotalGroups     int64
-	ProdsWithGreets int64
-	GreetedGroups   int64
-}
 
 type Group struct {
 	ID             uint   `gorm:"primaryKey"`
@@ -342,67 +322,15 @@ func (p *Pouet) GetGroup(groupID any) (Group, error) {
 	return group, nil
 }
 
-func (p *Pouet) GetProdGreets(r *http.Request, prodID any) ([]ProdGreet, error) {
-	var greets []ProdGreet
-	query := r.Context().Value("writableDB").(*Greets).db.Table("greets").
-		Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").
-		Where("greets.prod_id = ?", prodID).
-		Joins("INNER JOIN groups ON groups.id = greets.greetee_id").
-		Find(&greets)
-
-	if query.Error != nil {
-		return []ProdGreet{}, fmt.Errorf("get greets for prod=%v: %w", prodID, query.Error)
-	}
-
-	return greets, nil
+type PouetStats struct {
+	TotalProds  int64
+	TotalGroups int64
 }
 
-func (p *Pouet) GetGroupGreets(r *http.Request, groupID any) ([]GroupGreet, error) {
-	var raw_greets []Greet
-	query := r.Context().Value("writableDB").(*Greets).db.Find(&raw_greets, "greetee_id = ?", groupID)
-
-	if query.Error != nil {
-		return []GroupGreet{}, fmt.Errorf("get greets for greetee_id=%v: %w", groupID, query.Error)
-	}
-
-	var greets []GroupGreet
-
-	for i := range raw_greets {
-		raw_greet := &raw_greets[i]
-		var prod Prod
-		p.db.Find(&prod, "id = ?", raw_greet.ProdID).Association("Groups")
-		p.db.Model(&prod).Association("Groups").Find(&prod.Groups)
-		for j := range prod.Groups {
-			prod.Groups[j].getCounts(p.db)
-		}
-		greets = append(greets, GroupGreet{
-			Prod:      prod,
-			Reference: raw_greet.Reference,
-		})
-	}
-
-	return greets, nil
-}
-
-func (p *Pouet) GetMostGreetedGroups(r *http.Request, limit int) ([]map[string]any, error) {
-	var results []map[string]any
-	query := r.Context().Value("writableDB").(*Greets).db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
-
-	if query.Error != nil {
-		return []map[string]any{}, fmt.Errorf("get most %d greeted groups: %w", limit, query.Error)
-	}
-
-	return results, nil
-}
-
-func (p *Pouet) GetStats(r *http.Request) DatabaseStats {
-	var stats DatabaseStats
-	writableDB := r.Context().Value("writableDB").(*Greets)
-	writableDB.db.Model(Greet{}).Count(&stats.TotalGreets)
+func (p *Pouet) GetPouetStats() PouetStats {
+	var stats PouetStats
 	p.db.Model(Prod{}).Count(&stats.TotalProds)
 	p.db.Model(Group{}).Count(&stats.TotalGroups)
-	writableDB.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
-	writableDB.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
 	return stats
 }
 

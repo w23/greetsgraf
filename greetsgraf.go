@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("Cannot open pouet database file %s: %v", args.pouet_db, err)
 	}
 
-	greetsDB, err := GreetsOpen(args.greets_db)
+	greetsDB, err := GreetsOpen(args.greets_db, &pouetDB)
 	if err != nil {
 		flag.Usage()
 		log.Fatalf("Cannot open greets database file %s: %v", args.greets_db, err)

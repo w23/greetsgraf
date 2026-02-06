@@ -94,12 +94,6 @@ func (p *Pouet) prodGet(w http.ResponseWriter, r *http.Request) {
 		Note  string
 	}
 
-	type ResponseGroupWithID struct {
-		ID             uint
-		Name           string
-		Disambiguation string
-	}
-
 	response_prod := struct {
 		ID         uint
 		Name       string
@@ -139,7 +133,8 @@ func (p *Pouet) prodGet(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	greets, err := p.GetProdGreets(r, pid)
+	greetsDB := ctx.Value("writableDB").(*Greets)
+	greets, err := greetsDB.GetProdGreets(r, pid)
 	if err != nil {
 		log.Println(err)
 	} else {
@@ -162,7 +157,8 @@ func (p *Pouet) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	prod_id := ctx.Value("prod_id")
 
-	greets, err := p.GetProdGreets(r, prod_id)
+	greetsDB := ctx.Value("writableDB").(*Greets)
+	greets, err := greetsDB.GetProdGreets(r, prod_id)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -175,7 +171,8 @@ func (p *Pouet) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	group_id := ctx.Value("group_id")
 
-	greets, err := p.GetGroupGreets(r, group_id)
+	greetsDB := ctx.Value("writableDB").(*Greets)
+	greets, err := greetsDB.GetGroupGreets(r, group_id)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -226,15 +223,19 @@ func (g *Greets) greetsDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Pouet) getStats(w http.ResponseWriter, r *http.Request) {
-	stats := p.GetStats(r)
+	ctx := r.Context()
+	greetsDB := ctx.Value("writableDB").(*Greets)
+	stats := greetsDB.GetStats(r)
 	respondJson(w, http.StatusOK, stats)
 }
 
 func (p *Pouet) groupsGreeted(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	query := r.URL.Query()
 	limit, _ := strconv.Atoi(query.Get("limit"))
 
-	results, err := p.GetMostGreetedGroups(r, limit)
+	greetsDB := ctx.Value("writableDB").(*Greets)
+	results, err := greetsDB.GetMostGreetedGroups(r, limit)
 
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
@@ -279,6 +280,7 @@ func listen(pouetDB *Pouet, greetsDB *Greets, listen string, serve_static string
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := context.WithValue(r.Context(), "writableDB", greetsDB)
+			ctx = context.WithValue(ctx, "pouetDB", pouetDB)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
