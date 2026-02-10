@@ -718,25 +718,43 @@ func parseArgs() (args Args) {
 	return
 }
 
+type SetupArgs struct {
+	DBFile      string
+	Create      bool
+	PouetProds  string
+	PouetGroups string
+	BuildIndex  bool
+}
+
+func SetupDatabase(args SetupArgs) (*gorm.DB, error) {
+	db, err := DatabaseOpen(args.DBFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if args.Create {
+		create(db, args.PouetProds, args.PouetGroups)
+		buildIndex(db)
+	} else if args.BuildIndex {
+		buildIndex(db)
+	}
+
+	return db, nil
+}
+
 func main() {
 	args := parseArgs()
 
-	if args.usage {
-		flag.Usage()
-		return
-	}
-
-	db, err := DatabaseOpen(args.db)
+	db, err := SetupDatabase(SetupArgs{
+		DBFile:      args.db,
+		Create:      args.create,
+		PouetProds:  args.pouet_prods,
+		PouetGroups: args.pouet_groups,
+		BuildIndex:  args.index,
+	})
 	if err != nil {
 		flag.Usage()
-		log.Fatalf("Cannot open database file %s: %v", args.db, err)
-	}
-
-	if args.create {
-		create(db, args.pouet_prods, args.pouet_groups)
-		buildIndex(db)
-	} else if args.index {
-		buildIndex(db)
+		log.Fatalf("Cannot setup database %s: %v", args.db, err)
 	}
 
 	if args.serve {
