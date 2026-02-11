@@ -109,10 +109,6 @@ func create(db *gorm.DB, prodsfile string, groupsfile string) {
 		log.Fatal("When creating a new db, pouet data dumps are needed\n")
 	}
 
-	db.AutoMigrate(&Group{})
-	db.AutoMigrate(&Prod{})
-	db.AutoMigrate(&Greet{})
-
 	log.Printf("Importing groups...")
 
 	{
@@ -731,6 +727,8 @@ func SetupDatabase(args SetupArgs) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	db.AutoMigrate(&Group{}, &Prod{}, &Greet{})
 
 	if args.Create {
 		create(db, args.PouetProds, args.PouetGroups)
