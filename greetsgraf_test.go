@@ -3,26 +3,17 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
-func testDB() *gorm.DB {
-	dbfile := "/tmp/test_greetsgraf.db"
-	os.Remove(dbfile)
-	db, err := gorm.Open(sqlite.Open(dbfile), &gorm.Config{})
-	if err != nil {
-		panic(err)
-	}
-	return db
-}
-
 func TestStatsEndpoint(t *testing.T) {
-	db := testDB()
-	db.AutoMigrate(&Group{}, &Prod{}, &Greet{})
+	db, err := SetupDatabase(SetupArgs{
+		DBFile: ":memory:?cache=shared",
+		Create: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	server := httptest.NewServer(Server(db))
 	defer server.Close()
