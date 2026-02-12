@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStatsEndpoint(t *testing.T) {
@@ -11,22 +14,16 @@ func TestStatsEndpoint(t *testing.T) {
 		DBFile: ":memory:?cache=shared",
 		Create: false,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	server := httptest.NewServer(Server(db))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/v1/stats")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestIngestAndRetrieve(t *testing.T) {
@@ -37,30 +34,20 @@ func TestIngestAndRetrieve(t *testing.T) {
 		PouetGroups: "./test/pouet-groups.json.gz",
 		BuildIndex:  true,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	server := httptest.NewServer(Server(db))
 	defer server.Close()
 
 	statsResp, err := http.Get(server.URL + "/v1/stats")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer statsResp.Body.Close()
 
-	if statsResp.StatusCode != http.StatusOK {
-		t.Errorf("Expected stats status 200, got %d", statsResp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, statsResp.StatusCode)
 
 	prodResp, err := http.Get(server.URL + "/v1/prods/1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer prodResp.Body.Close()
 
-	if prodResp.StatusCode != http.StatusOK {
-		t.Errorf("Expected prod status 200, got %d", prodResp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, prodResp.StatusCode)
 }

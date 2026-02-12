@@ -30,13 +30,27 @@ go fmt ./...
 
 Note:
 - `CGO_CFLAGS="-D_LARGEFILE64_SOURCE"` is required with musl libc. Set it if encountering `pread64 undeclared` errors.
-- `-tags "sqlite_omit_load_extension sqlite_fts5"` also needs to be passed to `go test` commands.
 
 ## Testing
 
-No formal test suite exists. Test functionality manually via:
-- HTTP API endpoints: `curl http://localhost:8000/v1/stats`
-- Database operations: verify data via SQLite tools
+Test data files are available in `./test/` directory:
+- `pouet-groups.json.gz` - test group data
+- `pouet-prods.json.gz` - test prod data
+
+### Running Tests
+
+All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. Use the following command:
+
+```bash
+CGO_CFLAGS="-D_LARGEFILE64_SOURCE" CGO_ENABLED=1 go test -tags "sqlite_omit_load_extension sqlite_fts5"
+```
+
+### Test Structure
+
+When writing tests:
+1. Use `SetupDatabase()` with `SetupArgs` to initialize the database
+2. Use `httptest.NewServer(Server(db))` to create a test HTTP server
+3. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
 
 ## Code Style Guidelines
 
