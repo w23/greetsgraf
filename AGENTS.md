@@ -28,7 +28,9 @@ go vet ./...
 go fmt ./...
 ```
 
-Note that `CGO_CFLAGS="-D_LARGEFILE64_SOURCE"` is required with musl libc. Set it if encountering `pread64 undeclared` errors.
+Note:
+- `CGO_CFLAGS="-D_LARGEFILE64_SOURCE"` is required with musl libc. Set it if encountering `pread64 undeclared` errors.
+- `-tags "sqlite_omit_load_extension sqlite_fts5"` also needs to be passed to `go test` commands.
 
 ## Testing
 
