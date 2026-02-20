@@ -39,11 +39,7 @@ Test data files are available in `./test/` directory:
 
 ### Running Tests
 
-All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. Use the following command:
-
-```bash
-CGO_CFLAGS="-D_LARGEFILE64_SOURCE" CGO_ENABLED=1 go test -tags "sqlite_omit_load_extension sqlite_fts5"
-```
+All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests.
 
 ### Test Structure
 
