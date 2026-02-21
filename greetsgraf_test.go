@@ -86,11 +86,13 @@ func TestIngestAndRetrieve(t *testing.T) {
 
 	statsResponse := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
 
-	assert.Equal(t, statsResponse.TotalGreets, 0)
-	assert.Equal(t, statsResponse.TotalProds, 420)
-	assert.Equal(t, statsResponse.TotalGroups, 64)
-	assert.Equal(t, statsResponse.ProdsWithGreets, 0)
-	assert.Equal(t, statsResponse.GreetedGroups, 0)
+	assert.Equal(t, statsResponse, StatsResponse{
+		TotalGreets:     0,
+		TotalProds:      420,
+		TotalGroups:     64,
+		ProdsWithGreets: 0,
+		GreetedGroups:   0,
+	})
 
 	t.Run("GroupSearchTheBlackLotus", func(t *testing.T) {
 		groups1 := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=The%20Black%20Lotus", http.StatusOK)
