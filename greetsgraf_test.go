@@ -94,15 +94,21 @@ func TestIngestAndRetrieve(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, groupResp1.StatusCode)
 
-		var groups1 []GroupSearchResponse
 		bodyBytes, err = io.ReadAll(groupResp1.Body)
 		require.NoError(t, err)
+
+		var groups1 []GroupSearchResponse
 		err = json.Unmarshal(bodyBytes, &groups1)
 		require.NoError(t, err)
 
 		assert.Len(t, groups1, 1)
-		assert.Equal(t, groups1[0].ID, uint(1))
-		assert.Equal(t, groups1[0].Name, "The Black Lotus")
+		assert.Equal(t, groups1[0], GroupSearchResponse{
+			ID:             uint(1),
+			Name:           "The Black Lotus",
+			Disambiguation: "",
+			ProdsCount:     64,
+			GreetsCount:    0,
+		})
 
 		groupResp2, err := http.Get(server.URL + "/v1/groups/search?name=Exceed")
 		require.NoError(t, err)

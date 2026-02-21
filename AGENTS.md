@@ -47,6 +47,7 @@ When writing tests:
 1. Use `SetupDatabase()` with `SetupArgs` to initialize the database
 2. Use `httptest.NewServer(Server(db))` to create a test HTTP server
 3. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
+4. When comparing response results with expected values, do a full struct type variable comparison as opposed to individual fields comparison.
 
 ## Code Style Guidelines
 
