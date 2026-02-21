@@ -11,6 +11,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func makeRequest[T any](t *testing.T, url string, expectedStatus int) T {
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, expectedStatus, resp.StatusCode)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result T
+	err = json.Unmarshal(bodyBytes, &result)
+	require.NoError(t, err)
+
+	return result
+}
+
 type StatsResponse struct {
 	TotalGreets     int `json:"TotalGreets"`
 	TotalProds      int `json:"TotalProds"`
@@ -67,19 +84,7 @@ func TestIngestAndRetrieve(t *testing.T) {
 	server := httptest.NewServer(Server(db))
 	defer server.Close()
 
-	statsResp, err := http.Get(server.URL + "/v1/stats")
-	require.NoError(t, err)
-	defer statsResp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, statsResp.StatusCode)
-
-	var bodyBytes []byte
-	bodyBytes, err = io.ReadAll(statsResp.Body)
-	require.NoError(t, err)
-
-	var statsResponse StatsResponse
-	err = json.Unmarshal(bodyBytes, &statsResponse)
-	require.NoError(t, err)
+	statsResponse := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
 
 	assert.Equal(t, statsResponse.TotalGreets, 0)
 	assert.Equal(t, statsResponse.TotalProds, 420)
@@ -88,19 +93,8 @@ func TestIngestAndRetrieve(t *testing.T) {
 	assert.Equal(t, statsResponse.GreetedGroups, 0)
 
 	t.Run("GroupSearchTheBlackLotus", func(t *testing.T) {
-		groupResp1, err := http.Get(server.URL + "/v1/groups/search?name=The%20Black%20Lotus")
-		require.NoError(t, err)
-		defer groupResp1.Body.Close()
-
-		assert.Equal(t, http.StatusOK, groupResp1.StatusCode)
-
-		bodyBytes, err = io.ReadAll(groupResp1.Body)
-		require.NoError(t, err)
-		t.Logf("Group search response for 'The Black Lotus': %s", string(bodyBytes))
-
-		var groups1 []GroupSearchResponse
-		err = json.Unmarshal(bodyBytes, &groups1)
-		require.NoError(t, err)
+		groups1 := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=The%20Black%20Lotus", http.StatusOK)
+		t.Logf("Group search response for 'The Black Lotus': %v", groups1)
 
 		assert.Len(t, groups1, 1)
 		assert.Equal(t, groups1[0], GroupSearchResponse{
@@ -113,19 +107,8 @@ func TestIngestAndRetrieve(t *testing.T) {
 	})
 
 	t.Run("GroupSearchExceed", func(t *testing.T) {
-		groupResp2, err := http.Get(server.URL + "/v1/groups/search?name=Exceed")
-		require.NoError(t, err)
-		defer groupResp2.Body.Close()
-
-		assert.Equal(t, http.StatusOK, groupResp2.StatusCode)
-
-		bodyBytes, err = io.ReadAll(groupResp2.Body)
-		require.NoError(t, err)
-		t.Logf("Group search response for 'Exceed': %s", string(bodyBytes))
-
-		var groups2 []GroupSearchResponse
-		err = json.Unmarshal(bodyBytes, &groups2)
-		require.NoError(t, err)
+		groups2 := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=Exceed", http.StatusOK)
+		t.Logf("Group search response for 'Exceed': %v", groups2)
 
 		assert.Len(t, groups2, 1)
 		assert.Equal(t, groups2[0], GroupSearchResponse{
@@ -138,17 +121,8 @@ func TestIngestAndRetrieve(t *testing.T) {
 	})
 
 	t.Run("ProdGetID1", func(t *testing.T) {
-		prodResp, err := http.Get(server.URL + "/v1/prods/1")
-		require.NoError(t, err)
-		defer prodResp.Body.Close()
-
-		bodyBytes, err = io.ReadAll(prodResp.Body)
-		require.NoError(t, err)
-		t.Logf("Prod get response for ID 1: %s", string(bodyBytes))
-
-		var prodRespBody ProdGetResponse
-		err = json.Unmarshal(bodyBytes, &prodRespBody)
-		require.NoError(t, err)
+		prodRespBody := makeRequest[ProdGetResponse](t, server.URL+"/v1/prods/1", http.StatusOK)
+		t.Logf("Prod get response for ID 1: %v", prodRespBody)
 
 		assert.Equal(t, prodRespBody, ProdGetResponse{
 			ID:         uint(1),
@@ -171,17 +145,8 @@ func TestIngestAndRetrieve(t *testing.T) {
 	})
 
 	t.Run("ProdGetID2", func(t *testing.T) {
-		prodResp2, err := http.Get(server.URL + "/v1/prods/2")
-		require.NoError(t, err)
-		defer prodResp2.Body.Close()
-
-		bodyBytes, err = io.ReadAll(prodResp2.Body)
-		require.NoError(t, err)
-		t.Logf("Prod get response for ID 2: %s", string(bodyBytes))
-
-		var prodRespBody2 ProdGetResponse
-		err = json.Unmarshal(bodyBytes, &prodRespBody2)
-		require.NoError(t, err)
+		prodRespBody2 := makeRequest[ProdGetResponse](t, server.URL+"/v1/prods/2", http.StatusOK)
+		t.Logf("Prod get response for ID 2: %v", prodRespBody2)
 
 		assert.Equal(t, prodRespBody2, ProdGetResponse{
 			ID:         uint(2),
