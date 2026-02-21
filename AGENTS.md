@@ -32,22 +32,30 @@ Note:
 - `CGO_CFLAGS="-D_LARGEFILE64_SOURCE"` is required with musl libc. Set it if encountering `pread64 undeclared` errors.
 
 ## Testing
-
-Test data files are available in `./test/` directory:
-- `pouet-groups.json.gz` - test group data
-- `pouet-prods.json.gz` - test prod data
-
 ### Running Tests
 
-All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests.
+All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests, as regular `go test` without extra argoments is guaranteed to fail.
 
 ### Test Structure
 
-When writing tests:
+All tests should:
+1. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
+2. When comparing response results with expected values, do a full struct type variable comparison as opposed to individual fields comparison.
+3. For REST API tests, use the generic `makeRequest[T]` helper to DRY up HTTP request code. The function returns unmarshalled struct. Example:
+```go
+stats := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
+assert.Equal(t, 420, stats.TotalProds)
+```
+
+Top level (`func Test...`) tests should:
 1. Use `SetupDatabase()` with `SetupArgs` to initialize the database
 2. Use `httptest.NewServer(Server(db))` to create a test HTTP server
-3. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
-4. When comparing response results with expected values, do a full struct type variable comparison as opposed to individual fields comparison.
+
+Test data files for Pouet database contents are available in `./test/` directory:
+- `pouet-groups.json.gz` - test group data
+- `pouet-prods.json.gz` - test prod data
+
+Prefer minimizing the number of top level tests. Include many similar-themed subtests within one top level test.
 
 ## Code Style Guidelines
 
