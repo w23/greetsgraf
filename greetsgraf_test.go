@@ -29,11 +29,11 @@ func makeRequest[T any](t *testing.T, url string, expectedStatus int) T {
 }
 
 type StatsResponse struct {
-	TotalGreets     int `json:"TotalGreets"`
-	TotalProds      int `json:"TotalProds"`
-	TotalGroups     int `json:"TotalGroups"`
-	ProdsWithGreets int `json:"ProdsWithGreets"`
-	GreetedGroups   int `json:"GreetedGroups"`
+	TotalGreets     int64 `json:"TotalGreets"`
+	TotalProds      int64 `json:"TotalProds"`
+	TotalGroups     int64 `json:"TotalGroups"`
+	ProdsWithGreets int64 `json:"ProdsWithGreets"`
+	GreetedGroups   int64 `json:"GreetedGroups"`
 }
 
 type GroupSearchResponse struct {
@@ -65,9 +65,9 @@ type ProdGetResponse struct {
 	Screenshot string          `json:"screenshot"`
 	Groups     []ResponseGroup `json:"groups"`
 	Greets     []struct {
-		ID    uint
-		Group ResponseGroup
-		Note  string
+		ID    uint          `json:"id"`
+		Group ResponseGroup `json:"group"`
+		Note  string        `json:"note"`
 	} `json:"greets"`
 }
 
@@ -122,6 +122,13 @@ func TestIngestAndRetrieve(t *testing.T) {
 		})
 	})
 
+	t.Run("GroupSearchNoResults", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=nonexistentgroup12345", http.StatusOK)
+		t.Logf("Group search response for non-existent group: %v", groups)
+
+		assert.Len(t, groups, 0)
+	})
+
 	t.Run("ProdGetID1", func(t *testing.T) {
 		prodRespBody := makeRequest[ProdGetResponse](t, server.URL+"/v1/prods/1", http.StatusOK)
 		t.Logf("Prod get response for ID 1: %v", prodRespBody)
@@ -168,5 +175,19 @@ func TestIngestAndRetrieve(t *testing.T) {
 			},
 			Greets: nil,
 		})
+	})
+
+	t.Run("GroupSearchInvalidFTS", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=*invalid*", http.StatusOK)
+		t.Logf("Group search with invalid FTS query: %v", groups)
+
+		assert.Len(t, groups, 0)
+	})
+
+	t.Run("GroupSearchEmptyName", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=", http.StatusOK)
+		t.Logf("Group search with empty name: %v", groups)
+
+		assert.Len(t, groups, 0)
 	})
 }
