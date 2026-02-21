@@ -87,7 +87,7 @@ func TestIngestAndRetrieve(t *testing.T) {
 	assert.Equal(t, statsResponse.ProdsWithGreets, 0)
 	assert.Equal(t, statsResponse.GreetedGroups, 0)
 
-	t.Run("QueryTwoGroupsAndProds", func(t *testing.T) {
+	t.Run("GroupSearchTheBlackLotus", func(t *testing.T) {
 		groupResp1, err := http.Get(server.URL + "/v1/groups/search?name=The%20Black%20Lotus")
 		require.NoError(t, err)
 		defer groupResp1.Body.Close()
@@ -110,7 +110,9 @@ func TestIngestAndRetrieve(t *testing.T) {
 			ProdsCount:     64,
 			GreetsCount:    0,
 		})
+	})
 
+	t.Run("GroupSearchExceed", func(t *testing.T) {
 		groupResp2, err := http.Get(server.URL + "/v1/groups/search?name=Exceed")
 		require.NoError(t, err)
 		defer groupResp2.Body.Close()
@@ -133,7 +135,9 @@ func TestIngestAndRetrieve(t *testing.T) {
 			ProdsCount:     24,
 			GreetsCount:    0,
 		})
+	})
 
+	t.Run("ProdGetID1", func(t *testing.T) {
 		prodResp, err := http.Get(server.URL + "/v1/prods/1")
 		require.NoError(t, err)
 		defer prodResp.Body.Close()
@@ -164,7 +168,9 @@ func TestIngestAndRetrieve(t *testing.T) {
 			},
 			Greets: nil,
 		})
+	})
 
+	t.Run("ProdGetID2", func(t *testing.T) {
 		prodResp2, err := http.Get(server.URL + "/v1/prods/2")
 		require.NoError(t, err)
 		defer prodResp2.Body.Close()
