@@ -96,6 +96,7 @@ func TestIngestAndRetrieve(t *testing.T) {
 
 		bodyBytes, err = io.ReadAll(groupResp1.Body)
 		require.NoError(t, err)
+		t.Logf("Group search response for 'The Black Lotus': %s", string(bodyBytes))
 
 		var groups1 []GroupSearchResponse
 		err = json.Unmarshal(bodyBytes, &groups1)
@@ -116,63 +117,83 @@ func TestIngestAndRetrieve(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, groupResp2.StatusCode)
 
-		var groups2 []GroupSearchResponse
 		bodyBytes, err = io.ReadAll(groupResp2.Body)
 		require.NoError(t, err)
+		t.Logf("Group search response for 'Exceed': %s", string(bodyBytes))
+
+		var groups2 []GroupSearchResponse
 		err = json.Unmarshal(bodyBytes, &groups2)
 		require.NoError(t, err)
 
 		assert.Len(t, groups2, 1)
-		assert.Equal(t, groups2[0].ID, uint(2))
-		assert.Equal(t, groups2[0].Name, "Exceed")
+		assert.Equal(t, groups2[0], GroupSearchResponse{
+			ID:             uint(2),
+			Name:           "Exceed",
+			Disambiguation: "pc/c64/c16",
+			ProdsCount:     24,
+			GreetsCount:    0,
+		})
 
-		prodResp1, err := http.Get(server.URL + "/v1/prods/1")
+		prodResp, err := http.Get(server.URL + "/v1/prods/1")
 		require.NoError(t, err)
-		defer prodResp1.Body.Close()
+		defer prodResp.Body.Close()
 
-		assert.Equal(t, http.StatusOK, prodResp1.StatusCode)
-
-		var prod1 ProdGetResponse
-		bodyBytes, err = io.ReadAll(prodResp1.Body)
+		bodyBytes, err = io.ReadAll(prodResp.Body)
 		require.NoError(t, err)
-		err = json.Unmarshal(bodyBytes, &prod1)
+		t.Logf("Prod get response for ID 1: %s", string(bodyBytes))
+
+		var prodRespBody ProdGetResponse
+		err = json.Unmarshal(bodyBytes, &prodRespBody)
 		require.NoError(t, err)
 
-		assert.Equal(t, prod1.ID, uint(1))
-		assert.Equal(t, prod1.Name, "Astral Blur")
-		assert.Len(t, prod1.Groups, 1)
-		assert.Equal(t, prod1.Groups[0].ID, uint(1))
-		assert.Equal(t, prod1.Groups[0].Name, "The Black Lotus")
+		assert.Equal(t, prodRespBody, ProdGetResponse{
+			ID:         uint(1),
+			Name:       "Astral Blur",
+			Year:       1997,
+			Month:      3,
+			Day:        15,
+			Video:      "https://www.youtube.com/watch?v=eZyLSHyUGBY",
+			Rank:       712,
+			VoteUp:     84,
+			VotePig:    18,
+			VoteDown:   5,
+			Demozoo:    11,
+			Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg",
+			Groups: []ResponseGroup{
+				{ID: 1, Name: "The Black Lotus", Disambiguation: ""},
+			},
+			Greets: nil,
+		})
 
 		prodResp2, err := http.Get(server.URL + "/v1/prods/2")
 		require.NoError(t, err)
 		defer prodResp2.Body.Close()
 
-		assert.Equal(t, http.StatusOK, prodResp2.StatusCode)
-
-		var prod2 ProdGetResponse
 		bodyBytes, err = io.ReadAll(prodResp2.Body)
 		require.NoError(t, err)
-		err = json.Unmarshal(bodyBytes, &prod2)
+		t.Logf("Prod get response for ID 2: %s", string(bodyBytes))
+
+		var prodRespBody2 ProdGetResponse
+		err = json.Unmarshal(bodyBytes, &prodRespBody2)
 		require.NoError(t, err)
 
-		assert.Equal(t, prod2.ID, uint(2))
-		assert.Equal(t, prod2.Name, "Jizz")
-		assert.Len(t, prod2.Groups, 1)
-		assert.Equal(t, prod2.Groups[0].ID, uint(1))
-		assert.Equal(t, prod2.Groups[0].Name, "The Black Lotus")
+		assert.Equal(t, prodRespBody2, ProdGetResponse{
+			ID:         uint(2),
+			Name:       "Jizz",
+			Year:       1997,
+			Month:      7,
+			Day:        15,
+			Video:      "https://www.youtube.com/watch?v=iXgseVYvhek",
+			Rank:       364,
+			VoteUp:     104,
+			VotePig:    11,
+			VoteDown:   2,
+			Demozoo:    12,
+			Screenshot: "http://content.pouet.net/files/screenshots/00000/00000002.jpg",
+			Groups: []ResponseGroup{
+				{ID: 1, Name: "The Black Lotus", Disambiguation: ""},
+			},
+			Greets: nil,
+		})
 	})
-
-	prodResp, err := http.Get(server.URL + "/v1/prods/1")
-	require.NoError(t, err)
-	defer prodResp.Body.Close()
-
-	var prodRespBody ProdGetResponse
-	bodyBytes, err = io.ReadAll(prodResp.Body)
-	require.NoError(t, err)
-	err = json.Unmarshal(bodyBytes, &prodRespBody)
-	require.NoError(t, err)
-
-	assert.Equal(t, prodRespBody.ID, uint(1))
-	assert.Equal(t, prodRespBody.Name, "Astral Blur")
 }
