@@ -98,13 +98,14 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups1 := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=The%20Black%20Lotus", http.StatusOK)
 		t.Logf("Group search response for 'The Black Lotus': %v", groups1)
 
-		assert.Len(t, groups1, 1)
-		assert.Equal(t, groups1[0], GroupSearchResponse{
-			ID:             uint(1),
-			Name:           "The Black Lotus",
-			Disambiguation: "",
-			ProdsCount:     64,
-			GreetsCount:    0,
+		assert.Equal(t, groups1, []GroupSearchResponse{
+			{
+				ID:             uint(1),
+				Name:           "The Black Lotus",
+				Disambiguation: "",
+				ProdsCount:     64,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -112,13 +113,14 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups2 := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=Exceed", http.StatusOK)
 		t.Logf("Group search response for 'Exceed': %v", groups2)
 
-		assert.Len(t, groups2, 1)
-		assert.Equal(t, groups2[0], GroupSearchResponse{
-			ID:             uint(2),
-			Name:           "Exceed",
-			Disambiguation: "pc/c64/c16",
-			ProdsCount:     24,
-			GreetsCount:    0,
+		assert.Equal(t, groups2, []GroupSearchResponse{
+			{
+				ID:             uint(2),
+				Name:           "Exceed",
+				Disambiguation: "pc/c64/c16",
+				ProdsCount:     24,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -126,7 +128,7 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=nonexistentgroup12345", http.StatusOK)
 		t.Logf("Group search response for non-existent group: %v", groups)
 
-		assert.Len(t, groups, 0)
+		assert.Equal(t, groups, []GroupSearchResponse{})
 	})
 
 	t.Run("ProdGetID1", func(t *testing.T) {
@@ -181,34 +183,35 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=*invalid*", http.StatusOK)
 		t.Logf("Group search with invalid FTS query: %v", groups)
 
-		assert.Len(t, groups, 0)
+		assert.Equal(t, groups, []GroupSearchResponse{})
 	})
 
 	t.Run("GroupSearchEmptyName", func(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=", http.StatusOK)
 		t.Logf("Group search with empty name: %v", groups)
 
-		assert.Len(t, groups, 0)
+		assert.Equal(t, groups, []GroupSearchResponse{})
 	})
 
 	t.Run("GroupSearchAndromeda", func(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=Andromeda", http.StatusOK)
 		t.Logf("Group search response for 'Andromeda': %v", groups)
 
-		assert.Len(t, groups, 2)
-		assert.Equal(t, groups[0], GroupSearchResponse{
-			ID:             uint(196),
-			Name:           "Andromeda",
-			Disambiguation: "",
-			ProdsCount:     27,
-			GreetsCount:    0,
-		})
-		assert.Equal(t, groups[1], GroupSearchResponse{
-			ID:             uint(1317),
-			Name:           "Andromeda Software Development",
-			Disambiguation: "",
-			ProdsCount:     58,
-			GreetsCount:    0,
+		assert.Equal(t, groups, []GroupSearchResponse{
+			{
+				ID:             uint(196),
+				Name:           "Andromeda",
+				Disambiguation: "",
+				ProdsCount:     27,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(1317),
+				Name:           "Andromeda Software Development",
+				Disambiguation: "",
+				ProdsCount:     58,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -216,13 +219,14 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=brausch", http.StatusOK)
 		t.Logf("Group search response for 'brausch': %v", groups)
 
-		assert.Len(t, groups, 1)
-		assert.Equal(t, groups[0], GroupSearchResponse{
-			ID:             uint(322),
-			Name:           "Farbrausch",
-			Disambiguation: "",
-			ProdsCount:     148,
-			GreetsCount:    0,
+		assert.Equal(t, groups, []GroupSearchResponse{
+			{
+				ID:             uint(322),
+				Name:           "Farbrausch",
+				Disambiguation: "",
+				ProdsCount:     148,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -230,13 +234,14 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=software", http.StatusOK)
 		t.Logf("Group search response for 'software': %v", groups)
 
-		assert.Len(t, groups, 1)
-		assert.Equal(t, groups[0], GroupSearchResponse{
-			ID:             uint(1317),
-			Name:           "Andromeda Software Development",
-			Disambiguation: "",
-			ProdsCount:     58,
-			GreetsCount:    0,
+		assert.Equal(t, groups, []GroupSearchResponse{
+			{
+				ID:             uint(1317),
+				Name:           "Andromeda Software Development",
+				Disambiguation: "",
+				ProdsCount:     58,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -244,13 +249,14 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=TBC", http.StatusOK)
 		t.Logf("Group search response for 'TBC': %v", groups)
 
-		assert.Len(t, groups, 1)
-		assert.Equal(t, groups[0], GroupSearchResponse{
-			ID:             uint(1623),
-			Name:           "TBC",
-			Disambiguation: "",
-			ProdsCount:     47,
-			GreetsCount:    0,
+		assert.Equal(t, groups, []GroupSearchResponse{
+			{
+				ID:             uint(1623),
+				Name:           "TBC",
+				Disambiguation: "",
+				ProdsCount:     47,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -258,13 +264,14 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=orb", http.StatusOK)
 		t.Logf("Group search response for 'orb': %v", groups)
 
-		assert.Len(t, groups, 1)
-		assert.Equal(t, groups[0], GroupSearchResponse{
-			ID:             uint(7439),
-			Name:           "Orb",
-			Disambiguation: "",
-			ProdsCount:     17,
-			GreetsCount:    0,
+		assert.Equal(t, groups, []GroupSearchResponse{
+			{
+				ID:             uint(7439),
+				Name:           "Orb",
+				Disambiguation: "",
+				ProdsCount:     17,
+				GreetsCount:    0,
+			},
 		})
 	})
 
@@ -272,41 +279,42 @@ func TestIngestAndRetrieve(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=a", http.StatusOK)
 		t.Logf("Group search response for 'a': %v", groups)
 
-		assert.Len(t, groups, 5)
-		assert.Equal(t, groups[0], GroupSearchResponse{
-			ID:             uint(1),
-			Name:           "The Black Lotus",
-			Disambiguation: "",
-			ProdsCount:     64,
-			GreetsCount:    0,
-		})
-		assert.Equal(t, groups[1], GroupSearchResponse{
-			ID:             uint(196),
-			Name:           "Andromeda",
-			Disambiguation: "",
-			ProdsCount:     27,
-			GreetsCount:    0,
-		})
-		assert.Equal(t, groups[2], GroupSearchResponse{
-			ID:             uint(322),
-			Name:           "Farbrausch",
-			Disambiguation: "",
-			ProdsCount:     148,
-			GreetsCount:    0,
-		})
-		assert.Equal(t, groups[3], GroupSearchResponse{
-			ID:             uint(697),
-			Name:           "Rgba",
-			Disambiguation: "",
-			ProdsCount:     37,
-			GreetsCount:    0,
-		})
-		assert.Equal(t, groups[4], GroupSearchResponse{
-			ID:             uint(1317),
-			Name:           "Andromeda Software Development",
-			Disambiguation: "",
-			ProdsCount:     58,
-			GreetsCount:    0,
+		assert.Equal(t, groups, []GroupSearchResponse{
+			{
+				ID:             uint(1),
+				Name:           "The Black Lotus",
+				Disambiguation: "",
+				ProdsCount:     64,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(196),
+				Name:           "Andromeda",
+				Disambiguation: "",
+				ProdsCount:     27,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(322),
+				Name:           "Farbrausch",
+				Disambiguation: "",
+				ProdsCount:     148,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(697),
+				Name:           "Rgba",
+				Disambiguation: "",
+				ProdsCount:     37,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(1317),
+				Name:           "Andromeda Software Development",
+				Disambiguation: "",
+				ProdsCount:     58,
+				GreetsCount:    0,
+			},
 		})
 	})
 }

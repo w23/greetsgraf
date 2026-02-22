@@ -41,7 +41,8 @@ All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 supp
 All tests should:
 1. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
 2. When comparing response results with expected values, do a full struct type variable comparison as opposed to individual fields comparison.
-3. For REST API tests, use the generic `makeRequest[T]` helper to DRY up HTTP request code. The function returns unmarshalled struct. Example:
+3. Same goes for arrays. Compare agains the entire array, instead of checking for length and individual items.
+4. For REST API tests, use the generic `makeRequest[T]` helper to DRY up HTTP request code. The function returns unmarshalled struct. Example:
 ```go
 stats := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
 assert.Equal(t, 420, stats.TotalProds)
