@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +12,83 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type ResponseGroup struct {
+	ID             uint   `json:"id"`
+	Name           string `json:"name"`
+	Disambiguation string `json:"disambiguation"`
+}
+
+type ResponseGreet struct {
+	ID    uint          `json:"ID"`
+	Group ResponseGroup `json:"Group"`
+	Note  string        `json:"Note"`
+}
+
+type GroupGreetsResponse struct {
+	ID        uint   `json:"ID"`
+	ProdID    uint   `json:"ProdID"`
+	Prod      Prod   `json:"Prod"`
+	Reference string `json:"Reference"`
+}
+
+type GroupGreetedResponse struct {
+	GroupID   uint   `json:"group_id"`
+	GroupName string `json:"group_name"`
+	Count     int64  `json:"count"`
+}
+
+type ProdGreetsResponse struct {
+	GreeteeID uint   `json:"GreeteeID"`
+	Reference string `json:"Reference"`
+}
+
+type GroupSearchResponse struct {
+	ID             uint   `json:"id"`
+	Name           string `json:"name"`
+	Disambiguation string `json:"disambiguation"`
+	ProdsCount     int64  `json:"prodsCount"`
+	GreetsCount    int64  `json:"greetsCount"`
+}
+
+type ProdGetResponse struct {
+	ID         uint            `json:"id"`
+	Name       string          `json:"name"`
+	Year       int             `json:"year"`
+	Month      int             `json:"month"`
+	Day        int             `json:"day"`
+	Video      string          `json:"video"`
+	Rank       int             `json:"rank"`
+	VoteUp     int             `json:"voteUp"`
+	VotePig    int             `json:"votePig"`
+	VoteDown   int             `json:"voteDown"`
+	Demozoo    int             `json:"demozoo"`
+	Screenshot string          `json:"screenshot"`
+	Groups     []ResponseGroup `json:"groups"`
+	Greets     []ResponseGreet `json:"greets"`
+}
+
+type CreateGreetRequest struct {
+	ProdId  uint   `json:"prod_id"`
+	GroupId uint   `json:"group_id"`
+	Note    string `json:"note"`
+}
+
+type CreateGreetResponse struct {
+	ID uint
+}
+
+type DeleteGreetResponse struct {
+	Rows int64
+}
+
+type StatsResponse struct {
+	TotalGreets     int64 `json:"TotalGreets"`
+	TotalProds      int64 `json:"TotalProds"`
+	TotalGroups     int64 `json:"TotalGroups"`
+	ProdsWithGreets int64 `json:"ProdsWithGreets"`
+	GreetedGroups   int64 `json:"GreetedGroups"`
+}
 
 func makeRequest[T any](t *testing.T, url string, expectedStatus int) T {
 	resp, err := http.Get(url)
@@ -28,47 +107,50 @@ func makeRequest[T any](t *testing.T, url string, expectedStatus int) T {
 	return result
 }
 
-type StatsResponse struct {
-	TotalGreets     int64 `json:"TotalGreets"`
-	TotalProds      int64 `json:"TotalProds"`
-	TotalGroups     int64 `json:"TotalGroups"`
-	ProdsWithGreets int64 `json:"ProdsWithGreets"`
-	GreetedGroups   int64 `json:"GreetedGroups"`
+func makeRequestWithBody[T any](t *testing.T, url string, method string, body interface{}, expectedStatus int) T {
+	jsonBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(method, url, bytes.NewReader(jsonBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, expectedStatus, resp.StatusCode)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result T
+	err = json.Unmarshal(bodyBytes, &result)
+	require.NoError(t, err)
+
+	return result
 }
 
-type GroupSearchResponse struct {
-	ID             uint   `json:"id"`
-	Name           string `json:"name"`
-	Disambiguation string `json:"disambiguation"`
-	ProdsCount     int64  `json:"prodsCount"`
-	GreetsCount    int64  `json:"greetsCount"`
-}
+func makeDeleteRequest[T any](t *testing.T, url string, expectedStatus int) T {
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	require.NoError(t, err)
 
-type ResponseGroup struct {
-	ID             uint   `json:"id"`
-	Name           string `json:"name"`
-	Disambiguation string `json:"disambiguation"`
-}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 
-type ProdGetResponse struct {
-	ID         uint            `json:"id"`
-	Name       string          `json:"name"`
-	Year       int             `json:"year"`
-	Month      int             `json:"month"`
-	Day        int             `json:"day"`
-	Video      string          `json:"video"`
-	Rank       int             `json:"rank"`
-	VoteUp     int             `json:"voteup"`
-	VotePig    int             `json:"votepig"`
-	VoteDown   int             `json:"votedown"`
-	Demozoo    int             `json:"demozoo"`
-	Screenshot string          `json:"screenshot"`
-	Groups     []ResponseGroup `json:"groups"`
-	Greets     []struct {
-		ID    uint          `json:"id"`
-		Group ResponseGroup `json:"group"`
-		Note  string        `json:"note"`
-	} `json:"greets"`
+	assert.Equal(t, expectedStatus, resp.StatusCode)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result T
+	err = json.Unmarshal(bodyBytes, &result)
+	require.NoError(t, err)
+
+	return result
 }
 
 func TestIngestAndRetrieve(t *testing.T) {
@@ -316,5 +398,190 @@ func TestIngestAndRetrieve(t *testing.T) {
 				GreetsCount:    0,
 			},
 		})
+	})
+}
+
+func TestGreets(t *testing.T) {
+	db, err := SetupDatabase(SetupArgs{
+		DBFile:      ":memory:?cache=shared",
+		Create:      true,
+		PouetProds:  "./test/pouet-prods.json.gz",
+		PouetGroups: "./test/pouet-groups.json.gz",
+		BuildIndex:  true,
+	})
+	require.NoError(t, err)
+
+	server := httptest.NewServer(Server(db))
+	defer server.Close()
+
+	expectedStats := StatsResponse{
+		TotalGreets:     0,
+		TotalProds:      420,
+		TotalGroups:     64,
+		ProdsWithGreets: 0,
+		GreetedGroups:   0,
+	}
+
+	t.Run("PostNewGreet", func(t *testing.T) {
+		stats := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
+		assert.Equal(t, expectedStats, stats)
+
+		prodToGreet := uint(1)
+		groupToGreet := uint(1)
+
+		createReq := CreateGreetRequest{
+			ProdId:  prodToGreet,
+			GroupId: groupToGreet,
+			Note:    "Test greet",
+		}
+		createResp := makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusOK)
+		assert.Greater(t, createResp.ID, uint(0))
+
+		expectedStats.ProdsWithGreets += 1
+		expectedStats.GreetedGroups += 1
+		expectedStats.TotalGreets += 1
+
+		stats = makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
+		assert.Equal(t, expectedStats, stats)
+
+		prodResp := makeRequest[ProdGetResponse](t, server.URL+"/v1/prods/1", http.StatusOK)
+		require.Len(t, prodResp.Greets, 1)
+		assert.Equal(t, createResp.ID, prodResp.Greets[0].ID)
+		assert.Equal(t, groupToGreet, prodResp.Greets[0].Group.ID)
+		assert.Equal(t, "Test greet", prodResp.Greets[0].Note)
+
+		groupGreets := makeRequest[[]GroupGreetsResponse](t, server.URL+"/v1/groups/1/greets", http.StatusOK)
+		require.Len(t, groupGreets, 1)
+		assert.Equal(t, prodToGreet, groupGreets[0].Prod.ID)
+		assert.Equal(t, "Test greet", groupGreets[0].Reference)
+
+		groupsGreeted := makeRequest[[]GroupGreetedResponse](t, server.URL+"/v1/groups/greeted", http.StatusOK)
+		require.Len(t, groupsGreeted, 1)
+		assert.Equal(t, groupToGreet, groupsGreeted[0].GroupID)
+		assert.Equal(t, int64(1), groupsGreeted[0].Count)
+
+		prodGreets := makeRequest[[]ProdGreetsResponse](t, server.URL+"/v1/prods/1/greets", http.StatusOK)
+		require.Len(t, prodGreets, 1)
+		assert.Equal(t, groupToGreet, prodGreets[0].GreeteeID)
+		assert.Equal(t, "Test greet", prodGreets[0].Reference)
+	})
+
+	t.Run("PostNewGreetWithEmptyNote", func(t *testing.T) {
+		createReq := CreateGreetRequest{
+			ProdId:  2,
+			GroupId: 1,
+			Note:    "",
+		}
+		createResp := makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusOK)
+		assert.Greater(t, createResp.ID, uint(0))
+
+		expectedStats.ProdsWithGreets += 1
+		expectedStats.TotalGreets += 1
+
+		stats := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
+		assert.Equal(t, expectedStats, stats)
+	})
+
+	t.Run("POST non-existent prod", func(t *testing.T) {
+		createReq := CreateGreetRequest{
+			ProdId:  999999,
+			GroupId: 1,
+			Note:    "Should fail",
+		}
+		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusBadRequest)
+	})
+
+	t.Run("POST non-existent group", func(t *testing.T) {
+		db, err := SetupDatabase(SetupArgs{
+			DBFile:      ":memory:?cache=shared",
+			Create:      true,
+			PouetProds:  "./test/pouet-prods.json.gz",
+			PouetGroups: "./test/pouet-groups.json.gz",
+			BuildIndex:  true,
+		})
+		require.NoError(t, err)
+
+		server := httptest.NewServer(Server(db))
+		defer server.Close()
+
+		createReq := CreateGreetRequest{
+			ProdId:  1,
+			GroupId: 999999,
+			Note:    "Should fail",
+		}
+		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusBadRequest)
+	})
+
+	t.Run("POST duplicate greet", func(t *testing.T) {
+		createReq := CreateGreetRequest{
+			ProdId:  1,
+			GroupId: 1,
+			Note:    "Duplicate",
+		}
+		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusBadRequest)
+	})
+
+	t.Run("POST malformed JSON", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/greets", bytes.NewReader([]byte("{invalid json")))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST empty request body", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/greets", bytes.NewReader([]byte{}))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("DELETE valid greet", func(t *testing.T) {
+		// Use unique pair ofr prod id and group id to make sure that stats update is easy
+		createReq := CreateGreetRequest{
+			ProdId:  3,
+			GroupId: 2,
+			Note:    "Test greet",
+		}
+		createResp := makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusOK)
+		assert.Greater(t, createResp.ID, uint(0))
+
+		expectedStats.ProdsWithGreets += 1
+		expectedStats.GreetedGroups += 1
+		expectedStats.TotalGreets += 1
+
+		stats := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
+		assert.Equal(t, expectedStats, stats)
+
+		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, fmt.Sprintf("%s/v1/greets/%d", server.URL, createResp.ID), http.StatusOK)
+		assert.Equal(t, int64(1), deleteResp.Rows)
+
+		expectedStats.ProdsWithGreets -= 1
+		expectedStats.GreetedGroups -= 1
+		expectedStats.TotalGreets -= 1
+
+		stats = makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
+		assert.Equal(t, expectedStats, stats)
+	})
+
+	t.Run("DELETE non-existent greet", func(t *testing.T) {
+		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, server.URL+"/v1/greets/999999", http.StatusNotFound)
+		assert.Equal(t, DeleteGreetResponse{}, deleteResp)
+	})
+
+	t.Run("DELETE invalid ID format", func(t *testing.T) {
+		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, server.URL+"/v1/greets/abc", http.StatusBadRequest)
+		assert.Equal(t, DeleteGreetResponse{}, deleteResp)
 	})
 }

@@ -36,7 +36,7 @@ Note:
 
 All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests, as regular `go test` without extra argoments is guaranteed to fail.
 
-### Test Structure
+### Making new tests
 
 All tests should:
 1. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
@@ -57,6 +57,10 @@ Test data files for Pouet database contents are available in `./test/` directory
 - `pouet-prods.json.gz` - test prod data
 
 Prefer minimizing the number of top level tests. Include many similar-themed subtests within one top level test.
+
+Subtest MUST always use the same database and server created at the top of the toplevel test. Subtests MUST NOT create their own database or server.
+
+Subtest names MUST only consist of alphanumeric latin characters. They MUST NOT contain spaces or special symbols or unicode.
 
 ## Code Style Guidelines
 
