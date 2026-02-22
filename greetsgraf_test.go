@@ -190,4 +190,123 @@ func TestIngestAndRetrieve(t *testing.T) {
 
 		assert.Len(t, groups, 0)
 	})
+
+	t.Run("GroupSearchAndromeda", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=Andromeda", http.StatusOK)
+		t.Logf("Group search response for 'Andromeda': %v", groups)
+
+		assert.Len(t, groups, 2)
+		assert.Equal(t, groups[0], GroupSearchResponse{
+			ID:             uint(196),
+			Name:           "Andromeda",
+			Disambiguation: "",
+			ProdsCount:     27,
+			GreetsCount:    0,
+		})
+		assert.Equal(t, groups[1], GroupSearchResponse{
+			ID:             uint(1317),
+			Name:           "Andromeda Software Development",
+			Disambiguation: "",
+			ProdsCount:     58,
+			GreetsCount:    0,
+		})
+	})
+
+	t.Run("GroupSearchBrausch", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=brausch", http.StatusOK)
+		t.Logf("Group search response for 'brausch': %v", groups)
+
+		assert.Len(t, groups, 1)
+		assert.Equal(t, groups[0], GroupSearchResponse{
+			ID:             uint(322),
+			Name:           "Farbrausch",
+			Disambiguation: "",
+			ProdsCount:     148,
+			GreetsCount:    0,
+		})
+	})
+
+	t.Run("GroupSearchSoftware", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=software", http.StatusOK)
+		t.Logf("Group search response for 'software': %v", groups)
+
+		assert.Len(t, groups, 1)
+		assert.Equal(t, groups[0], GroupSearchResponse{
+			ID:             uint(1317),
+			Name:           "Andromeda Software Development",
+			Disambiguation: "",
+			ProdsCount:     58,
+			GreetsCount:    0,
+		})
+	})
+
+	t.Run("GroupSearchTBC", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=TBC", http.StatusOK)
+		t.Logf("Group search response for 'TBC': %v", groups)
+
+		assert.Len(t, groups, 1)
+		assert.Equal(t, groups[0], GroupSearchResponse{
+			ID:             uint(1623),
+			Name:           "TBC",
+			Disambiguation: "",
+			ProdsCount:     47,
+			GreetsCount:    0,
+		})
+	})
+
+	t.Run("GroupSearchOrb", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=orb", http.StatusOK)
+		t.Logf("Group search response for 'orb': %v", groups)
+
+		assert.Len(t, groups, 1)
+		assert.Equal(t, groups[0], GroupSearchResponse{
+			ID:             uint(7439),
+			Name:           "Orb",
+			Disambiguation: "",
+			ProdsCount:     17,
+			GreetsCount:    0,
+		})
+	})
+
+	t.Run("GroupSearchSingleLetterA", func(t *testing.T) {
+		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=a", http.StatusOK)
+		t.Logf("Group search response for 'a': %v", groups)
+
+		assert.Len(t, groups, 5)
+		assert.Equal(t, groups[0], GroupSearchResponse{
+			ID:             uint(1),
+			Name:           "The Black Lotus",
+			Disambiguation: "",
+			ProdsCount:     64,
+			GreetsCount:    0,
+		})
+		assert.Equal(t, groups[1], GroupSearchResponse{
+			ID:             uint(196),
+			Name:           "Andromeda",
+			Disambiguation: "",
+			ProdsCount:     27,
+			GreetsCount:    0,
+		})
+		assert.Equal(t, groups[2], GroupSearchResponse{
+			ID:             uint(322),
+			Name:           "Farbrausch",
+			Disambiguation: "",
+			ProdsCount:     148,
+			GreetsCount:    0,
+		})
+		assert.Equal(t, groups[3], GroupSearchResponse{
+			ID:             uint(697),
+			Name:           "Rgba",
+			Disambiguation: "",
+			ProdsCount:     37,
+			GreetsCount:    0,
+		})
+		assert.Equal(t, groups[4], GroupSearchResponse{
+			ID:             uint(1317),
+			Name:           "Andromeda Software Development",
+			Disambiguation: "",
+			ProdsCount:     58,
+			GreetsCount:    0,
+		})
+	})
 }
