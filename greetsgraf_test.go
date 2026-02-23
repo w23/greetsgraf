@@ -39,9 +39,9 @@ type GroupGreetedResponse struct {
 }
 
 type ProdGreetsResponse struct {
-	GreeteeID uint   `json:"GreeteeID"`
+	GreeteeID   uint   `json:"GreeteeID"`
 	GreeteeName string `json:"GreeteeName"`
-	Reference string `json:"Reference"`
+	Reference   string `json:"Reference"`
 }
 
 type GroupSearchResponse struct {
@@ -507,7 +507,7 @@ func TestGreets(t *testing.T) {
 	})
 	*/
 
-	t.Run("POST duplicate greet", func(t *testing.T) {
+	t.Run("POSTDuplicateGreet", func(t *testing.T) {
 		createReq := CreateGreetRequest{
 			ProdId:  1,
 			GroupId: 1,
@@ -516,7 +516,7 @@ func TestGreets(t *testing.T) {
 		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusBadRequest)
 	})
 
-	t.Run("POST malformed JSON", func(t *testing.T) {
+	t.Run("POSTMalformedJSON", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/greets", bytes.NewReader([]byte("{invalid json")))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -529,7 +529,7 @@ func TestGreets(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
-	t.Run("POST empty request body", func(t *testing.T) {
+	t.Run("POSTEmptyRequestBody", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/greets", bytes.NewReader([]byte{}))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -542,7 +542,7 @@ func TestGreets(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
-	t.Run("DELETE valid greet", func(t *testing.T) {
+	t.Run("DELETEValidGreet", func(t *testing.T) {
 		// Use unique pair ofr prod id and group id to make sure that stats update is easy
 		createReq := CreateGreetRequest{
 			ProdId:  3,
@@ -577,7 +577,7 @@ func TestGreets(t *testing.T) {
 	})
 	*/
 
-	t.Run("DELETE invalid ID format", func(t *testing.T) {
+	t.Run("DELETEInvalidIDFormat", func(t *testing.T) {
 		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, server.URL+"/v1/greets/abc", http.StatusBadRequest)
 		assert.Equal(t, DeleteGreetResponse{}, deleteResp)
 	})
