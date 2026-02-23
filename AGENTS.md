@@ -95,6 +95,7 @@ import (
 - Use GORM for ORM operations
 - Define response types explicitly for API contracts
 - Use pointers for optional values in structs
+- Use `any` instead of `interface{}`
 
 ### Error Handling
 - Log errors with context: `log.Printf("Error: %v", err)`
@@ -108,12 +109,6 @@ import (
 - Commit with `tx.Commit()` or rollback with `tx.Rollback()`
 - Use foreign key constraints and indexes where appropriate
 
-## Docker
-- Base image: `golang:1.16-alpine`
-- CGO enabled for SQLite
-- Static binary for scratch base image
-- Exposes port 8000
-
 ## API Conventions
 - JSON responses with `Content-Type: application/json`
 - Consistent error structure: `{"Error": "message"}`
@@ -121,7 +116,6 @@ import (
 - Pagination via query params where needed
 
 ## Existing Rules
-- No Cursor rules or Copilot rules found
 - Follow `.editorconfig` settings for all files
 
 ## Go Specific Notes
