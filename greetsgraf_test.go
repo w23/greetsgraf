@@ -26,8 +26,6 @@ type ResponseGreet struct {
 }
 
 type GroupGreetsResponse struct {
-	ID        uint   `json:"ID"`
-	ProdID    uint   `json:"ProdID"`
 	Prod      Prod   `json:"Prod"`
 	Reference string `json:"Reference"`
 }
@@ -450,25 +448,28 @@ func TestGreets(t *testing.T) {
 		assert.Equal(t, expectedStats, stats)
 
 		prodResp := makeRequest[ProdGetResponse](t, fmt.Sprintf("%s/v1/prods/%d", server.URL, prodToGreet), http.StatusOK)
-		require.Len(t, prodResp.Greets, 1)
-		assert.Equal(t, createResp.ID, prodResp.Greets[0].ID)
-		assert.Equal(t, groupToGreet, prodResp.Greets[0].Group.ID)
-		assert.Equal(t, "Test greet", prodResp.Greets[0].Note)
+		assert.Equal(t, []ResponseGreet{
+			{
+				ID:    createResp.ID,
+				Group: ResponseGroup{ID: groupToGreet, Name: "The Black Lotus", Disambiguation: ""},
+				Note:  "Test greet",
+			},
+		}, prodResp.Greets)
 
 		groupGreets := makeRequest[[]GroupGreetsResponse](t, server.URL+"/v1/groups/1/greets", http.StatusOK)
-		require.Len(t, groupGreets, 1)
-		assert.Equal(t, prodToGreet, groupGreets[0].Prod.ID)
-		assert.Equal(t, "Test greet", groupGreets[0].Reference)
+		expectedGroupGreets := []GroupGreetsResponse{
+			{
+				Prod:      Prod{ID: prodToGreet, Name: "Astral Blur", Year: 1997, Month: 3, Day: 15, Video: "https://www.youtube.com/watch?v=eZyLSHyUGBY", Rank: 712, VoteUp: 84, VotePig: 18, VoteDown: 5, Demozoo: 11, Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg", Groups: []Group{{ID: 1, Name: "The Black Lotus", Disambiguation: "", ProdsCount: 64, GreetsCount: 1}}},
+				Reference: "Test greet",
+			},
+		}
+		assert.Equal(t, expectedGroupGreets, groupGreets)
 
 		groupsGreeted := makeRequest[[]GroupGreetedResponse](t, server.URL+"/v1/groups/greeted", http.StatusOK)
-		require.Len(t, groupsGreeted, 1)
-		assert.Equal(t, groupToGreet, groupsGreeted[0].GroupID)
-		assert.Equal(t, int64(1), groupsGreeted[0].Count)
+		assert.Equal(t, []GroupGreetedResponse{{GroupID: 1, GroupName: "The Black Lotus", Count: 1}}, groupsGreeted)
 
 		prodGreets := makeRequest[[]ProdGreetsResponse](t, server.URL+"/v1/prods/1/greets", http.StatusOK)
-		require.Len(t, prodGreets, 1)
-		assert.Equal(t, groupToGreet, prodGreets[0].GreeteeID)
-		assert.Equal(t, "Test greet", prodGreets[0].Reference)
+		assert.Equal(t, []ProdGreetsResponse{{GreeteeID: groupToGreet, GreeteeName: "The Black Lotus", Reference: "Test greet"}}, prodGreets)
 	})
 
 	t.Run("PostNewGreetWithEmptyNote", func(t *testing.T) {
