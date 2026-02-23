@@ -163,7 +163,7 @@ func TestIngestAndRetrieve(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	server := httptest.NewServer(Server(db))
+	server := httptest.NewServer(Server(db, ""))
 	defer server.Close()
 
 	statsResponse := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
@@ -411,7 +411,7 @@ func TestGreets(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	server := httptest.NewServer(Server(db))
+	server := httptest.NewServer(Server(db, ""))
 	defer server.Close()
 
 	expectedStats := StatsResponse{
@@ -492,18 +492,6 @@ func TestGreets(t *testing.T) {
 	})
 
 	t.Run("POST non-existent group", func(t *testing.T) {
-		db, err := SetupDatabase(SetupArgs{
-			DBFile:      ":memory:?cache=shared",
-			Create:      true,
-			PouetProds:  "./test/pouet-prods.json.gz",
-			PouetGroups: "./test/pouet-groups.json.gz",
-			BuildIndex:  true,
-		})
-		require.NoError(t, err)
-
-		server := httptest.NewServer(Server(db))
-		defer server.Close()
-
 		createReq := CreateGreetRequest{
 			ProdId:  1,
 			GroupId: 999999,

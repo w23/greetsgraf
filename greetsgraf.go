@@ -638,12 +638,19 @@ func GroupContext(next http.Handler) http.Handler {
 	})
 }
 
-func Server(db *gorm.DB) http.Handler {
+func Server(db *gorm.DB, serve_static string) http.Handler {
 	r := chi.NewRouter()
 	ctx := Context{db}
 
 	r.Use(middleware.Logger)
 	r.Use(middleware.Timeout(10 * time.Second))
+
+	if serve_static != "" {
+		fs := http.FileServer(http.Dir(serve_static))
+		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			fs.ServeHTTP(w, r)
+		})
+	}
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/stats", ctx.getStats)
@@ -678,11 +685,8 @@ func Server(db *gorm.DB) http.Handler {
 
 func listen(db *gorm.DB, listen string, serve_static string) {
 	mux := http.NewServeMux()
-	mux.Handle("/", Server(db))
 
-	if serve_static != "" {
-		mux.Handle("/", http.FileServer(http.Dir(serve_static)))
-	}
+	mux.Handle("/", Server(db, serve_static))
 
 	log.Printf("Listening on %+v", listen)
 	log.Fatal(http.ListenAndServe(listen, mux))
