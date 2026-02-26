@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # sqlite3 reqruies cgo
 ENV CGO_ENABLED=1
