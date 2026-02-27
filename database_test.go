@@ -15,9 +15,15 @@ func setupDatabase(t *testing.T, name string) Database {
 	db, err := DatabaseOpen(fmt.Sprintf("%s/%s.db", t.TempDir(), name))
 	require.NoError(t, err)
 
+	// Auto-migrate database schema
+	db.db.AutoMigrate(&Group{})
+	db.db.AutoMigrate(&Prod{})
+	db.db.AutoMigrate(&Greet{})
+
 	// Load initial test data used for all tests
 	// Use pouet.sh script to update/populate these files
-	db.ImportPouet("test/pouet-prods.json.gz", "test/pouet-groups.json.gz")
+	db.importProds("test/pouet-prods.json.gz")
+	db.importGroups("test/pouet-groups.json.gz")
 
 	return db
 }

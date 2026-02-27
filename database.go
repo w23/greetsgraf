@@ -151,139 +151,213 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 	db.db.AutoMigrate(&Greet{})
 
 	log.Printf("Importing prods...")
+	db.importProds(prodsfile)
 
-	{
-		prods, err := readJsonGz(prodsfile)
+	log.Printf("Importing groups...")
+	db.importGroups(groupsfile)
+
+	log.Printf("Import done.")
+}
+
+func (db *Database) importProds(prodsfile string) {
+	if prodsfile == "" {
+		log.Fatal("Prods file is required for import\n")
+	}
+
+	prods, err := readJsonGz(prodsfile)
+	if err != nil {
+		log.Fatalf("Unable to read prods from file %s: %v", prodsfile, err)
+	}
+
+	log.Printf("Loaded prods json into memory...")
+
+	prodsArray := (prods["prods"]).([]any)
+	numProds := len(prodsArray)
+
+	// Track which groups have been created to avoid duplicates
+	createdGroups := make(map[uint]bool)
+	groupCount := 0
+
+	// Single pass: import prods and groups together
+	tx := db.db.Begin()
+	for i, jprod := range prodsArray {
+		prod := jprod.(map[string]any)
+		pid, err := strconv.Atoi(prod["id"].(string))
 		if err != nil {
-			log.Fatalf("Unable to read prods from file %s: %v", prodsfile, err)
+			log.Printf("wtf id %s", prod["id"])
+			continue
 		}
 
-		log.Printf("Loaded prods json into memory...")
+		name := prod["name"].(string)
+		jdate, found := prod["releaseDate"]
 
-		prodsArray := (prods["prods"]).([]any)
-		numProds := len(prodsArray)
+		var year, month int
 
-		// Track which groups have been created to avoid duplicates
-		createdGroups := make(map[uint]bool)
-		groupCount := 0
-
-		// Single pass: import prods and groups together
-		tx := db.db.Begin()
-		for i, jprod := range prodsArray {
-			prod := jprod.(map[string]any)
-			pid, err := strconv.Atoi(prod["id"].(string))
+		if found && jdate != nil {
+			dateStr := jdate.(string)
+			year, month, err = parsePouetDate(dateStr)
+			// TODO: for missing/invalid dates try to parse manually, or refer to party_year
 			if err != nil {
-				log.Printf("wtf id %s", prod["id"])
+				log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], dateStr, err)
+				continue
+			}
+		} else {
+			log.Printf("Prod %v:%v has no date", prod["id"], name)
+		}
+
+		rank, _ := strconv.Atoi(prod["rank"].(string))
+		voteUp, _ := strconv.Atoi(prod["voteup"].(string))
+		votePig, _ := strconv.Atoi(prod["votepig"].(string))
+		voteDown, _ := strconv.Atoi(prod["votedown"].(string))
+
+		var demozoo int
+		if jsonDemozoo, haveDemozoo := prod["demozoo"]; haveDemozoo && jsonDemozoo != nil {
+			demozoo, _ = strconv.Atoi(jsonDemozoo.(string))
+		}
+
+		var video string
+		if dlinks, have := prod["downloadLinks"]; have {
+			array := dlinks.([]any)
+			for _, jlink := range array {
+				link := jlink.(map[string]any)
+				linkType := strings.ToLower(link["type"].(string))
+				if strings.Contains(linkType, "youtube") {
+					video = link["link"].(string)
+					break
+				}
+				if strings.Contains(linkType, "vimeo") {
+					video = link["link"].(string)
+					break
+				}
+			}
+		}
+
+		var screenshot string
+		if shot, found := prod["screenshot"]; found && shot != nil {
+			screenshot = shot.(string)
+		}
+
+		dbprod := Prod{
+			ID:         uint(pid),
+			Name:       name,
+			Year:       year,
+			Month:      month,
+			Rank:       rank,
+			VoteUp:     voteUp,
+			VoteDown:   voteDown,
+			VotePig:    votePig,
+			Demozoo:    demozoo,
+			Video:      video,
+			Screenshot: screenshot,
+		}
+
+		// Process groups: create new ones and associate with prod
+		jgroups := prod["groups"].([]any)
+		for _, jgroup := range jgroups {
+			group := jgroup.(map[string]any)
+			gidStr, ok := group["id"].(string)
+			if !ok {
+				continue
+			}
+			gid, err := strconv.Atoi(gidStr)
+			if err != nil {
+				log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
 				continue
 			}
 
-			name := prod["name"].(string)
-			jdate, found := prod["releaseDate"]
-
-			var year, month int
-
-			if found && jdate != nil {
-				dateStr := jdate.(string)
-				year, month, err = parsePouetDate(dateStr)
-				// TODO: for missing/invalid dates try to parse manually, or refer to party_year
-				if err != nil {
-					log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], dateStr, err)
-					continue
+			// Create group if not yet created
+			if !createdGroups[uint(gid)] {
+				name := group["name"].(string)
+				disambiguation, _ := group["disambiguation"].(string)
+				dbgroup := Group{
+					ID:             uint(gid),
+					Name:           name,
+					Disambiguation: disambiguation,
 				}
-			} else {
-				log.Printf("Prod %v:%v has no date", prod["id"], name)
+				tx.Create(&dbgroup)
+				createdGroups[uint(gid)] = true
+				groupCount++
 			}
 
-			rank, _ := strconv.Atoi(prod["rank"].(string))
-			voteUp, _ := strconv.Atoi(prod["voteup"].(string))
-			votePig, _ := strconv.Atoi(prod["votepig"].(string))
-			voteDown, _ := strconv.Atoi(prod["votedown"].(string))
-
-			var demozoo int
-			if jsonDemozoo, haveDemozoo := prod["demozoo"]; haveDemozoo && jsonDemozoo != nil {
-				demozoo, _ = strconv.Atoi(jsonDemozoo.(string))
-			}
-
-			var video string
-			if dlinks, have := prod["downloadLinks"]; have {
-				array := dlinks.([]any)
-				for _, jlink := range array {
-					link := jlink.(map[string]any)
-					linkType := strings.ToLower(link["type"].(string))
-					if strings.Contains(linkType, "youtube") {
-						video = link["link"].(string)
-						break
-					}
-					if strings.Contains(linkType, "vimeo") {
-						video = link["link"].(string)
-						break
-					}
-				}
-			}
-
-			var screenshot string
-			if shot, found := prod["screenshot"]; found && shot != nil {
-				screenshot = shot.(string)
-			}
-
-			dbprod := Prod{
-				ID:         uint(pid),
-				Name:       name,
-				Year:       year,
-				Month:      month,
-				Rank:       rank,
-				VoteUp:     voteUp,
-				VoteDown:   voteDown,
-				VotePig:    votePig,
-				Demozoo:    demozoo,
-				Video:      video,
-				Screenshot: screenshot,
-			}
-
-			// Process groups: create new ones and associate with prod
-			jgroups := prod["groups"].([]any)
-			for _, jgroup := range jgroups {
-				group := jgroup.(map[string]any)
-				gidStr, ok := group["id"].(string)
-				if !ok {
-					continue
-				}
-				gid, err := strconv.Atoi(gidStr)
-				if err != nil {
-					log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
-					continue
-				}
-
-				// Create group if not yet created
-				if !createdGroups[uint(gid)] {
-					name := group["name"].(string)
-					disambiguation, _ := group["disambiguation"].(string)
-					dbgroup := Group{
-						ID:             uint(gid),
-						Name:           name,
-						Disambiguation: disambiguation,
-					}
-					tx.Create(&dbgroup)
-					createdGroups[uint(gid)] = true
-					groupCount++
-				}
-
-				// Associate with prod
-				dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
-			}
-
-			tx.Create(&dbprod)
-
-			if (i+1)%1000 == 0 {
-				log.Printf("Processed %d / %d", i+1, numProds)
-			}
+			// Associate with prod
+			dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
 		}
-		tx.Commit()
 
-		log.Printf("Imported %d groups from prods", groupCount)
+		tx.Create(&dbprod)
+
+		if (i+1)%1000 == 0 {
+			log.Printf("Processed %d / %d", i+1, numProds)
+		}
+	}
+	tx.Commit()
+
+	log.Printf("Imported %d groups from prods", groupCount)
+}
+
+func (db *Database) importGroups(groupsfile string) {
+	if groupsfile == "" {
+		log.Fatal("Groups file is required for import\n")
 	}
 
-	log.Printf("Import done.")
+	groups, err := readJsonGz(groupsfile)
+	if err != nil {
+		log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
+	}
+
+	log.Printf("Loaded groups json into memory...")
+
+	groupsArray := (groups["groups"]).([]any)
+	numGroups := len(groupsArray)
+
+	updatedCount := 0
+	createdCount := 0
+
+	tx := db.db.Begin()
+	for i, jgroup := range groupsArray {
+		group := jgroup.(map[string]any)
+		gidStr, ok := group["id"].(string)
+		if !ok {
+			continue
+		}
+		gid, err := strconv.Atoi(gidStr)
+		if err != nil {
+			log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
+			continue
+		}
+
+		name := group["name"].(string)
+		disambiguation, _ := group["disambiguation"].(string)
+
+		// Check if group exists
+		var dbgroup Group
+		result := tx.First(&dbgroup, "id = ?", uint(gid))
+		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
+			// Create new group
+			dbgroup = Group{
+				ID:             uint(gid),
+				Name:           name,
+				Disambiguation: disambiguation,
+			}
+			tx.Create(&dbgroup)
+			createdCount++
+		} else if result.Error != nil {
+			log.Printf("Error finding group %d: %v", gid, result.Error)
+			continue
+		} else {
+			// Update existing group
+			dbgroup.Name = name
+			dbgroup.Disambiguation = disambiguation
+			tx.Save(&dbgroup)
+			updatedCount++
+		}
+
+		if (i+1)%1000 == 0 {
+			log.Printf("Processed %d / %d groups", i+1, numGroups)
+		}
+	}
+	tx.Commit()
+
+	log.Printf("Imported %d new groups, updated %d existing groups", createdCount, updatedCount)
 }
 
 func (db *Database) FindGroups(name string) ([]Group, error) {

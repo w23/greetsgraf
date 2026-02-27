@@ -46,7 +46,12 @@ func SetupDatabase(args SetupArgs) (Database, error) {
 	}
 
 	if args.Create {
-		db.ImportPouet(args.PouetProds, args.PouetGroups)
+		db.db.AutoMigrate(&Group{})
+		db.db.AutoMigrate(&Prod{})
+		db.db.AutoMigrate(&Greet{})
+
+		db.importProds(args.PouetProds)
+		db.importGroups(args.PouetGroups)
 		db.BuildIndex()
 	} else if args.BuildIndex {
 		db.BuildIndex()
