@@ -470,15 +470,21 @@ func (db *Database) Greet(prodID uint, groupID uint, note string) (uint, error) 
 	greet := Greet{
 		Reference: note,
 		GreeteeID: groupID,
+		ProdID:    prodID,
 	}
 
-	if err := tx.Model(&prod).Association("Greets").Append(&greet); err != nil {
-		// TODO what errors might be here?
-		return 0, fmt.Errorf("associate greets: %w", err)
+	log.Printf("Creating greet: prod_id=%v, group_id=%v, note=%v", prodID, groupID, note)
+	if err := tx.Create(&greet).Error; err != nil {
+		log.Printf("Create greet error: %v", err)
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return 0, fmt.Errorf("duplicate greet: prod_id=%v, greetee_id=%v", prodID, groupID)
+		}
+		return 0, fmt.Errorf("create greet: %w", err)
 	}
+	log.Printf("Greet created with ID: %v", greet.ID)
 
 	if err := tx.Commit().Error; err != nil {
-		// TODO what errors might be here?
+		log.Printf("Commit error: %v", err)
 		return 0, fmt.Errorf("tx commit: %w", err)
 	}
 

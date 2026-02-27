@@ -173,8 +173,8 @@ func TestPouetData(t *testing.T) {
 
 	assert.Equal(t, statsResponse, StatsResponse{
 		TotalGreets:     0,
-		TotalProds:      420,
-		TotalGroups:     64,
+		TotalProds:      431,
+		TotalGroups:     65,
 		ProdsWithGreets: 0,
 		GreetedGroups:   0,
 	})
@@ -188,7 +188,7 @@ func TestPouetData(t *testing.T) {
 				ID:             uint(1),
 				Name:           "The Black Lotus",
 				Disambiguation: "",
-				ProdsCount:     64,
+				ProdsCount:     67,
 				GreetsCount:    0,
 			},
 		})
@@ -225,7 +225,7 @@ func TestPouetData(t *testing.T) {
 			Name:       "Astral Blur",
 			Year:       1997,
 			Month:      3,
-			Day:        15,
+			Day:        0,
 			Video:      "https://www.youtube.com/watch?v=eZyLSHyUGBY",
 			Rank:       712,
 			VoteUp:     84,
@@ -249,7 +249,7 @@ func TestPouetData(t *testing.T) {
 			Name:       "Jizz",
 			Year:       1997,
 			Month:      7,
-			Day:        15,
+			Day:        0,
 			Video:      "https://www.youtube.com/watch?v=iXgseVYvhek",
 			Rank:       364,
 			VoteUp:     104,
@@ -287,14 +287,14 @@ func TestPouetData(t *testing.T) {
 				ID:             uint(196),
 				Name:           "Andromeda",
 				Disambiguation: "",
-				ProdsCount:     27,
+				ProdsCount:     33,
 				GreetsCount:    0,
 			},
 			{
 				ID:             uint(1317),
 				Name:           "Andromeda Software Development",
 				Disambiguation: "",
-				ProdsCount:     58,
+				ProdsCount:     60,
 				GreetsCount:    0,
 			},
 		})
@@ -324,7 +324,7 @@ func TestPouetData(t *testing.T) {
 				ID:             uint(1317),
 				Name:           "Andromeda Software Development",
 				Disambiguation: "",
-				ProdsCount:     58,
+				ProdsCount:     60,
 				GreetsCount:    0,
 			},
 		})
@@ -369,14 +369,14 @@ func TestPouetData(t *testing.T) {
 				ID:             uint(1),
 				Name:           "The Black Lotus",
 				Disambiguation: "",
-				ProdsCount:     64,
+				ProdsCount:     67,
 				GreetsCount:    0,
 			},
 			{
 				ID:             uint(196),
 				Name:           "Andromeda",
 				Disambiguation: "",
-				ProdsCount:     27,
+				ProdsCount:     33,
 				GreetsCount:    0,
 			},
 			{
@@ -397,7 +397,7 @@ func TestPouetData(t *testing.T) {
 				ID:             uint(1317),
 				Name:           "Andromeda Software Development",
 				Disambiguation: "",
-				ProdsCount:     58,
+				ProdsCount:     60,
 				GreetsCount:    0,
 			},
 		})
@@ -419,8 +419,8 @@ func TestGreets(t *testing.T) {
 
 	expectedStats := StatsResponse{
 		TotalGreets:     0,
-		TotalProds:      420,
-		TotalGroups:     64,
+		TotalProds:      431,
+		TotalGroups:     65,
 		ProdsWithGreets: 0,
 		GreetedGroups:   0,
 	}
@@ -459,7 +459,7 @@ func TestGreets(t *testing.T) {
 		groupGreets := makeRequest[[]GroupGreetsResponse](t, server.URL+"/v1/groups/1/greets", http.StatusOK)
 		expectedGroupGreets := []GroupGreetsResponse{
 			{
-				Prod:      Prod{ID: prodToGreet, Name: "Astral Blur", Year: 1997, Month: 3, Day: 15, Video: "https://www.youtube.com/watch?v=eZyLSHyUGBY", Rank: 712, VoteUp: 84, VotePig: 18, VoteDown: 5, Demozoo: 11, Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg", Groups: []Group{{ID: 1, Name: "The Black Lotus", Disambiguation: "", ProdsCount: 64, GreetsCount: 1}}},
+				Prod:      Prod{ID: prodToGreet, Name: "Astral Blur", Year: 1997, Month: 3, Day: 0, Video: "https://www.youtube.com/watch?v=eZyLSHyUGBY", Rank: 712, VoteUp: 84, VotePig: 18, VoteDown: 5, Demozoo: 11, Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg", Groups: []Group{{ID: 1, Name: "The Black Lotus", Disambiguation: "", ProdsCount: 67, GreetsCount: 1}}},
 				Reference: "Test greet",
 			},
 		}

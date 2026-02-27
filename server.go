@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -196,6 +197,10 @@ func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {
 
 	id, err := c.Greet(body.ProdId, body.GroupId, body.Note)
 	if err != nil {
+		if strings.Contains(err.Error(), "duplicate greet") {
+			respondErrJson(w, http.StatusBadRequest, err)
+			return
+		}
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -217,10 +222,11 @@ func (c *Database) greetsDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !removed {
-		respondJson(w, http.StatusNotFound, struct{}{})
+		respondJson(w, http.StatusNotFound, struct{ Rows int64 }{Rows: 0})
+		return
 	}
 
-	respondJson(w, http.StatusOK, struct{}{})
+	respondJson(w, http.StatusOK, struct{ Rows int64 }{Rows: 1})
 }
 
 func (c *Database) getStats(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +236,13 @@ func (c *Database) getStats(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) groupsGreeted(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	limit, _ := strconv.Atoi(query.Get("limit"))
+	limitStr := query.Get("limit")
+	limit := 20 // default
+	if limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil {
+			limit = parsed
+		}
+	}
 
 	results, err := c.GetMostGreetedGroups(limit)
 
