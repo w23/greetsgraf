@@ -34,12 +34,12 @@ Note:
 ## Testing
 ### Running Tests
 
-All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests, as regular `go test` without extra argoments is guaranteed to fail.
+All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests, as regular `go test` without extra arguments is guaranteed to fail.
 
 ### Making new tests
 
 All tests should:
-1. Use `require` and `assert` packages to check for expected values. E.g. `requre.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
+1. Use `require` and `assert` packages to check for expected values. E.g. `require.NoError()` for error checks, `assert.Equal()` or other for less critical checks that don't block further test process.
 2. When comparing response results with expected values, do a full struct type variable comparison as opposed to individual fields comparison.
 3. Same goes for arrays. Compare agains the entire array, instead of checking for length and individual items.
 4. For REST API tests, use the generic `makeRequest[T]` helper to DRY up HTTP request code. The function returns unmarshalled struct. Example:
@@ -117,12 +117,17 @@ import (
 
 ## Existing Rules
 - Follow `.editorconfig` settings for all files
+- Run `go vet ./...` before commits to catch static analysis issues
 
 ## Go Specific Notes
 
 ### File Organization
-- Single-file application (`greetsgraf.go`) with all models, handlers, and business logic
-- No package structure - all code in `package main`
+- Multi-file application: `greetsgraf.go` (main), `database.go` (models & DB operations), `server.go` (HTTP handlers)
+- All code in `package main`
+
+### Pre-commit Checklist
+- Run `go vet ./...` for static analysis
+- Run `go fmt ./...` for formatting
 
 ### Model Definitions
 - Use GORM tags for database mapping
