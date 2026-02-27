@@ -11,19 +11,14 @@ import (
 func setupDatabase(t *testing.T, name string) Database {
 	t.Helper()
 
-	//db, err := DatabaseOpen("greetsgraf.db")
-	db, err := DatabaseOpen(fmt.Sprintf("%s/%s.db", t.TempDir(), name))
+	db, err := SetupDatabase(SetupArgs{
+		DBFile:      fmt.Sprintf("%s/%s.db", t.TempDir(), name),
+		Create:      true,
+		PouetProds:  "test/pouet-prods.json.gz",
+		PouetGroups: "test/pouet-groups.json.gz",
+		BuildIndex:  false,
+	})
 	require.NoError(t, err)
-
-	// Auto-migrate database schema
-	db.db.AutoMigrate(&Group{})
-	db.db.AutoMigrate(&Prod{})
-	db.db.AutoMigrate(&Greet{})
-
-	// Load initial test data used for all tests
-	// Use pouet.sh script to update/populate these files
-	db.importProds("test/pouet-prods.json.gz")
-	db.importGroups("test/pouet-groups.json.gz")
 
 	return db
 }

@@ -74,6 +74,10 @@ func DatabaseOpen(datafile string) (Database, error) {
 		return Database{nil}, fmt.Errorf("open database file %s: %w", datafile, err)
 	}
 
+	db.AutoMigrate(&Group{})
+	db.AutoMigrate(&Prod{})
+	db.AutoMigrate(&Greet{})
+
 	return Database{db}, err
 }
 
@@ -160,10 +164,6 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 }
 
 func (db *Database) importProds(prodsfile string) {
-	if prodsfile == "" {
-		log.Fatal("Prods file is required for import\n")
-	}
-
 	prods, err := readJsonGz(prodsfile)
 	if err != nil {
 		log.Fatalf("Unable to read prods from file %s: %v", prodsfile, err)
@@ -295,10 +295,6 @@ func (db *Database) importProds(prodsfile string) {
 }
 
 func (db *Database) importGroups(groupsfile string) {
-	if groupsfile == "" {
-		log.Fatal("Groups file is required for import\n")
-	}
-
 	groups, err := readJsonGz(groupsfile)
 	if err != nil {
 		log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
