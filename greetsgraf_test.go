@@ -174,7 +174,7 @@ func TestPouetData(t *testing.T) {
 	assert.Equal(t, StatsResponse{
 		TotalGreets:     0,
 		TotalProds:      431,
-		TotalGroups:     8,
+		TotalGroups:     65,
 		ProdsWithGreets: 0,
 		GreetedGroups:   0,
 	}, statsResponse)
@@ -373,6 +373,34 @@ func TestPouetData(t *testing.T) {
 				GreetsCount:    0,
 			},
 			{
+				ID:             uint(31),
+				Name:           "Haujobb",
+				Disambiguation: "",
+				ProdsCount:     1,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(44),
+				Name:           "Fairlight",
+				Disambiguation: "",
+				ProdsCount:     2,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(163),
+				Name:           "Satori",
+				Disambiguation: "",
+				ProdsCount:     3,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(195),
+				Name:           "Alcatraz",
+				Disambiguation: "",
+				ProdsCount:     1,
+				GreetsCount:    0,
+			},
+			{
 				ID:             uint(196),
 				Name:           "Andromeda",
 				Disambiguation: "",
@@ -387,17 +415,24 @@ func TestPouetData(t *testing.T) {
 				GreetsCount:    0,
 			},
 			{
-				ID:             uint(697),
-				Name:           "Rgba",
+				ID:             uint(443),
+				Name:           "Mainloop",
 				Disambiguation: "",
-				ProdsCount:     37,
+				ProdsCount:     3,
 				GreetsCount:    0,
 			},
 			{
-				ID:             uint(1317),
-				Name:           "Andromeda Software Development",
+				ID:             uint(457),
+				Name:           "Majic 12",
 				Disambiguation: "",
-				ProdsCount:     60,
+				ProdsCount:     1,
+				GreetsCount:    0,
+			},
+			{
+				ID:             uint(467),
+				Name:           "Triad",
+				Disambiguation: "",
+				ProdsCount:     2,
 				GreetsCount:    0,
 			},
 		})
@@ -420,7 +455,7 @@ func TestGreets(t *testing.T) {
 	expectedStats := StatsResponse{
 		TotalGreets:     0,
 		TotalProds:      431,
-		TotalGroups:     8,
+		TotalGroups:     65,
 		ProdsWithGreets: 0,
 		GreetedGroups:   0,
 	}

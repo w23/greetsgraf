@@ -140,6 +140,7 @@ func parsePouetDate(dateString string) (int, int, error) {
 	return int(date.Year()), 0, nil
 }
 
+// TODO return error
 func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 	if prodsfile == "" || groupsfile == "" {
 		flag.Usage()
@@ -150,47 +151,12 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 	db.db.AutoMigrate(&Prod{})
 	db.db.AutoMigrate(&Greet{})
 
-	log.Printf("Importing groups...")
-
-	{
-		groups, err := readJsonGz(groupsfile)
-		if err != nil {
-			log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
-		}
-
-		tx := db.db.Begin()
-
-		groups_array := (groups["groups"]).([]interface{})
-		for index, _ := range groups_array {
-			group := (groups_array[index]).(map[string]interface{})
-
-			name := group["name"].(string)
-			disambiguation := group["disambiguation"].(string)
-			pouet_id, err := strconv.ParseInt(group["id"].(string), 10, 64)
-
-			if err != nil {
-				log.Printf("wtf id %s", group["id"])
-				continue
-			}
-
-			dbgroup := Group{
-				ID:             uint(pouet_id),
-				Name:           name,
-				Disambiguation: disambiguation,
-			}
-
-			tx.Create(&dbgroup)
-		}
-
-		tx.Commit()
-	}
-
 	log.Printf("Importing prods...")
 
 	{
 		prods, err := readJsonGz(prodsfile)
 		if err != nil {
-			log.Fatalf("Unable to read prods from file %s: %v", groupsfile, err)
+			log.Fatalf("Unable to read prods from file %s: %v", prodsfile, err)
 		}
 
 		log.Printf("Loaded prods json into memory...")
@@ -198,24 +164,47 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 		prods_array := (prods["prods"]).([]interface{})
 		num_prods := len(prods_array)
 
-		// Build a set of valid group IDs from the groups import
-		validGroupIDs := make(map[uint]bool)
-		{
-			groups, err := readJsonGz(groupsfile)
-			if err != nil {
-				log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
-			}
-			groups_array := (groups["groups"]).([]interface{})
-			for _, g := range groups_array {
-				group := g.(map[string]interface{})
-				pouet_id, err := strconv.ParseInt(group["id"].(string), 10, 64)
-				if err == nil {
-					validGroupIDs[uint(pouet_id)] = true
+		// Collect all unique groups from prods first
+		uniqueGroups := make(map[uint]map[string]interface{})
+		for _, iprod := range prods_array {
+			prod := iprod.(map[string]interface{})
+			jgroups := prod["groups"].([]interface{})
+			for _, jgroup := range jgroups {
+				group := jgroup.(map[string]interface{})
+				gidStr, ok := group["id"].(string)
+				if !ok {
+					continue
+				}
+				gid, err := strconv.Atoi(gidStr)
+				if err != nil {
+					log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
+					continue
+				}
+				if _, exists := uniqueGroups[uint(gid)]; !exists {
+					uniqueGroups[uint(gid)] = group
 				}
 			}
 		}
 
+		// Import all unique groups collected from prods
 		tx := db.db.Begin()
+		for gid, groupData := range uniqueGroups {
+			name := groupData["name"].(string)
+			disambiguation, _ := groupData["disambiguation"].(string)
+
+			dbgroup := Group{
+				ID:             gid,
+				Name:           name,
+				Disambiguation: disambiguation,
+			}
+			tx.Create(&dbgroup)
+		}
+		tx.Commit()
+
+		log.Printf("Imported %d groups from prods", len(uniqueGroups))
+
+		// Import prods with group associations
+		tx = db.db.Begin()
 		for i, iprod := range prods_array {
 			prod := iprod.(map[string]interface{})
 			pid, err := strconv.Atoi(prod["id"].(string))
@@ -288,20 +277,20 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 				Screenshot: screenshot,
 			}
 
-			// Associate with groups (only if group was imported)
+			// Associate with all groups from prods data
 			jgroups := prod["groups"].([]interface{})
 			for _, jgroup := range jgroups {
 				group := jgroup.(map[string]interface{})
-				gid, err := strconv.Atoi(group["id"].(string))
+				gidStr, ok := group["id"].(string)
+				if !ok {
+					continue
+				}
+				gid, err := strconv.Atoi(gidStr)
 				if err != nil {
 					log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
 					continue
 				}
-
-				// Only associate with groups that were imported from the groups file
-				if validGroupIDs[uint(gid)] {
-					dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
-				}
+				dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
 			}
 
 			tx.Create(&dbprod)
@@ -310,7 +299,6 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 				log.Printf("Processed %d / %d", i+1, num_prods)
 			}
 		}
-
 		tx.Commit()
 	}
 
