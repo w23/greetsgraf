@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,11 +11,11 @@ func setupDatabase(t *testing.T, name string) Database {
 	t.Helper()
 
 	db, err := SetupDatabase(SetupArgs{
-		DBFile:      fmt.Sprintf("%s/%s.db", t.TempDir(), name),
+		DBFile:      ":memory:?cache=shared",
 		Create:      true,
 		PouetProds:  "test/pouet-prods.json.gz",
 		PouetGroups: "test/pouet-groups.json.gz",
-		BuildIndex:  false,
+		BuildIndex:  true,
 	})
 	require.NoError(t, err)
 
@@ -31,6 +30,30 @@ const rgbaID = uint(697)
 const tbcID = uint(1623)
 
 func TestPouetImport(t *testing.T) {
+	t.Run("NonExistingProdFile", func(t *testing.T) {
+		_, err := SetupDatabase(SetupArgs{
+			DBFile:      ":memory:?cache=shared",
+			Create:      true,
+			PouetProds:  "test/non-existing-prods.json.gz",
+			PouetGroups: "test/pouet-groups.json.gz",
+			BuildIndex:  false,
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to read prods from file")
+	})
+
+	t.Run("NonExistingGroupFile", func(t *testing.T) {
+		_, err := SetupDatabase(SetupArgs{
+			DBFile:      ":memory:?cache=shared",
+			Create:      true,
+			PouetProds:  "test/pouet-prods.json.gz",
+			PouetGroups: "test/non-existing-groups.json.gz",
+			BuildIndex:  false,
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to read groups from file")
+	})
+
 	db := setupDatabase(t, "pouet-import")
 
 	// Check that basic loading went fine

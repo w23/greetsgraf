@@ -143,11 +143,10 @@ func parsePouetDate(dateString string) (int, int, error) {
 	return int(date.Year()), 0, nil
 }
 
-// TODO return error
-func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
+func (db *Database) ImportPouet(prodsfile string, groupsfile string) error {
 	if prodsfile == "" || groupsfile == "" {
 		flag.Usage()
-		log.Fatal("When creating a new db, pouet data dumps are needed\n")
+		return fmt.Errorf("when creating a new db, pouet data dumps are needed")
 	}
 
 	db.db.AutoMigrate(&Group{})
@@ -155,23 +154,31 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 	db.db.AutoMigrate(&Greet{})
 
 	log.Printf("Importing prods...")
-	db.importProds(prodsfile)
+	if err := db.importProds(prodsfile); err != nil {
+		return err
+	}
 
 	log.Printf("Importing groups...")
-	db.importGroups(groupsfile)
+	if err := db.importGroups(groupsfile); err != nil {
+		return err
+	}
 
 	log.Printf("Import done.")
+	return nil
 }
 
-func (db *Database) importProds(prodsfile string) {
+func (db *Database) importProds(prodsfile string) error {
 	prods, err := readJsonGz(prodsfile)
 	if err != nil {
-		log.Fatalf("Unable to read prods from file %s: %v", prodsfile, err)
+		return fmt.Errorf("unable to read prods from file %s: %w", prodsfile, err)
 	}
 
 	log.Printf("Loaded prods json into memory...")
 
-	prodsArray := (prods["prods"]).([]any)
+	prodsArray, ok := prods["prods"].([]any)
+	if !ok {
+		return fmt.Errorf("prods field is not an array")
+	}
 	numProds := len(prodsArray)
 
 	// Track which groups have been created to avoid duplicates
@@ -180,61 +187,93 @@ func (db *Database) importProds(prodsfile string) {
 
 	// Single pass: import prods and groups together
 	tx := db.db.Begin()
+	defer tx.Rollback()
 	for i, jprod := range prodsArray {
-		prod := jprod.(map[string]any)
-		pid, err := strconv.Atoi(prod["id"].(string))
-		if err != nil {
-			log.Printf("wtf id %s", prod["id"])
+		prod, ok := jprod.(map[string]any)
+		if !ok {
+			log.Printf("Prod %d: invalid prod format", i)
 			continue
 		}
 
-		name := prod["name"].(string)
+		pidStr, ok := prod["id"].(string)
+		if !ok {
+			log.Printf("Prod %d: missing id", i)
+			continue
+		}
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			log.Printf("Prod %d:%s: cannot parse id '%s': %v", i, prod["name"], pidStr, err)
+			continue
+		}
+
+		name, ok := prod["name"].(string)
+		if !ok {
+			log.Printf("Prod %d:%d: missing name", i, pid)
+			continue
+		}
 		jdate, found := prod["releaseDate"]
 
 		var year, month int
 
 		if found && jdate != nil {
-			dateStr := jdate.(string)
+			dateStr, ok := jdate.(string)
+			if !ok {
+				log.Printf("Prod %d:%s: invalid date format", i, name)
+				continue
+			}
 			year, month, err = parsePouetDate(dateStr)
 			// TODO: for missing/invalid dates try to parse manually, or refer to party_year
 			if err != nil {
-				log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], dateStr, err)
+				log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, name, dateStr, err)
 				continue
 			}
 		} else {
-			log.Printf("Prod %v:%v has no date", prod["id"], name)
+			log.Printf("Prod %v:%v has no date", pid, name)
 		}
 
-		rank, _ := strconv.Atoi(prod["rank"].(string))
-		voteUp, _ := strconv.Atoi(prod["voteup"].(string))
-		votePig, _ := strconv.Atoi(prod["votepig"].(string))
-		voteDown, _ := strconv.Atoi(prod["votedown"].(string))
+		rankStr, _ := prod["rank"].(string)
+		rank, _ := strconv.Atoi(rankStr)
+		voteUpStr, _ := prod["voteup"].(string)
+		voteUp, _ := strconv.Atoi(voteUpStr)
+		votePigStr, _ := prod["votepig"].(string)
+		votePig, _ := strconv.Atoi(votePigStr)
+		voteDownStr, _ := prod["votedown"].(string)
+		voteDown, _ := strconv.Atoi(voteDownStr)
 
 		var demozoo int
 		if jsonDemozoo, haveDemozoo := prod["demozoo"]; haveDemozoo && jsonDemozoo != nil {
-			demozoo, _ = strconv.Atoi(jsonDemozoo.(string))
+			demozooStr, _ := jsonDemozoo.(string)
+			demozoo, _ = strconv.Atoi(demozooStr)
 		}
 
 		var video string
 		if dlinks, have := prod["downloadLinks"]; have {
-			array := dlinks.([]any)
-			for _, jlink := range array {
-				link := jlink.(map[string]any)
-				linkType := strings.ToLower(link["type"].(string))
-				if strings.Contains(linkType, "youtube") {
-					video = link["link"].(string)
-					break
-				}
-				if strings.Contains(linkType, "vimeo") {
-					video = link["link"].(string)
-					break
+			array, ok := dlinks.([]any)
+			if ok {
+				for _, jlink := range array {
+					link, ok := jlink.(map[string]any)
+					if !ok {
+						continue
+					}
+					linkType, ok := link["type"].(string)
+					if !ok {
+						continue
+					}
+					if strings.Contains(strings.ToLower(linkType), "youtube") {
+						video, _ = link["link"].(string)
+						break
+					}
+					if strings.Contains(strings.ToLower(linkType), "vimeo") {
+						video, _ = link["link"].(string)
+						break
+					}
 				}
 			}
 		}
 
 		var screenshot string
 		if shot, found := prod["screenshot"]; found && shot != nil {
-			screenshot = shot.(string)
+			screenshot, _ = shot.(string)
 		}
 
 		dbprod := Prod{
@@ -252,9 +291,16 @@ func (db *Database) importProds(prodsfile string) {
 		}
 
 		// Process groups: create new ones and associate with prod
-		jgroups := prod["groups"].([]any)
+		jgroups, ok := prod["groups"].([]any)
+		if !ok {
+			log.Printf("Prod %d:%s: missing groups", i, name)
+			continue
+		}
 		for _, jgroup := range jgroups {
-			group := jgroup.(map[string]any)
+			group, ok := jgroup.(map[string]any)
+			if !ok {
+				continue
+			}
 			gidStr, ok := group["id"].(string)
 			if !ok {
 				continue
@@ -267,14 +313,16 @@ func (db *Database) importProds(prodsfile string) {
 
 			// Create group if not yet created
 			if !createdGroups[uint(gid)] {
-				name := group["name"].(string)
+				gname, _ := group["name"].(string)
 				disambiguation, _ := group["disambiguation"].(string)
 				dbgroup := Group{
 					ID:             uint(gid),
-					Name:           name,
+					Name:           gname,
 					Disambiguation: disambiguation,
 				}
-				tx.Create(&dbgroup)
+				if err := tx.Create(&dbgroup).Error; err != nil {
+					return fmt.Errorf("create group %d:%s: %w", gid, gname, err)
+				}
 				createdGroups[uint(gid)] = true
 				groupCount++
 			}
@@ -283,45 +331,59 @@ func (db *Database) importProds(prodsfile string) {
 			dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
 		}
 
-		tx.Create(&dbprod)
+		if err := tx.Create(&dbprod).Error; err != nil {
+			return fmt.Errorf("create prod %d:%s: %w", pid, name, err)
+		}
 
 		if (i+1)%1000 == 0 {
 			log.Printf("Processed %d / %d", i+1, numProds)
 		}
 	}
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("commit prods: %w", err)
+	}
 
 	log.Printf("Imported %d groups from prods", groupCount)
+	return nil
 }
 
-func (db *Database) importGroups(groupsfile string) {
+func (db *Database) importGroups(groupsfile string) error {
 	groups, err := readJsonGz(groupsfile)
 	if err != nil {
-		log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
+		return fmt.Errorf("unable to read groups from file %s: %w", groupsfile, err)
 	}
 
 	log.Printf("Loaded groups json into memory...")
 
-	groupsArray := (groups["groups"]).([]any)
+	groupsArray, ok := groups["groups"].([]any)
+	if !ok {
+		return fmt.Errorf("groups field is not an array")
+	}
 	numGroups := len(groupsArray)
 
 	updatedCount := 0
 	createdCount := 0
 
 	tx := db.db.Begin()
+	defer tx.Rollback()
 	for i, jgroup := range groupsArray {
-		group := jgroup.(map[string]any)
+		group, ok := jgroup.(map[string]any)
+		if !ok {
+			log.Printf("Group %d: invalid group format", i)
+			continue
+		}
 		gidStr, ok := group["id"].(string)
 		if !ok {
+			log.Printf("Group %d: missing id", i)
 			continue
 		}
 		gid, err := strconv.Atoi(gidStr)
 		if err != nil {
-			log.Printf("Cannot parse '%+v' as id: %+v", group["id"], err)
+			log.Printf("Group %d: cannot parse '%+v' as id: %+v", i, group["id"], err)
 			continue
 		}
 
-		name := group["name"].(string)
+		name, _ := group["name"].(string)
 		disambiguation, _ := group["disambiguation"].(string)
 
 		// Check if group exists
@@ -334,7 +396,9 @@ func (db *Database) importGroups(groupsfile string) {
 				Name:           name,
 				Disambiguation: disambiguation,
 			}
-			tx.Create(&dbgroup)
+			if err := tx.Create(&dbgroup).Error; err != nil {
+				return fmt.Errorf("create group %d:%s: %w", gid, name, err)
+			}
 			createdCount++
 		} else if result.Error != nil {
 			log.Printf("Error finding group %d: %v", gid, result.Error)
@@ -343,7 +407,9 @@ func (db *Database) importGroups(groupsfile string) {
 			// Update existing group
 			dbgroup.Name = name
 			dbgroup.Disambiguation = disambiguation
-			tx.Save(&dbgroup)
+			if err := tx.Save(&dbgroup).Error; err != nil {
+				return fmt.Errorf("update group %d:%s: %w", gid, name, err)
+			}
 			updatedCount++
 		}
 
@@ -351,9 +417,12 @@ func (db *Database) importGroups(groupsfile string) {
 			log.Printf("Processed %d / %d groups", i+1, numGroups)
 		}
 	}
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("commit groups: %w", err)
+	}
 
 	log.Printf("Imported %d new groups, updated %d existing groups", createdCount, updatedCount)
+	return nil
 }
 
 func (db *Database) FindGroups(name string) ([]Group, error) {
