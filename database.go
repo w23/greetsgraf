@@ -93,7 +93,7 @@ func (db *Database) BuildIndex() {
 	}
 }
 
-func readJsonGz(filename string) (map[string]interface{}, error) {
+func readJsonGz(filename string) (map[string]any, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Printf("Error opening file %s: %v", filename, err)
@@ -106,7 +106,7 @@ func readJsonGz(filename string) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	var value map[string]interface{}
+	var value map[string]any
 	err = json.NewDecoder(gz).Decode(&value)
 	if err != nil {
 		log.Printf("Error decoding json from file %s: %v", filename, err)
@@ -160,7 +160,7 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 
 		log.Printf("Loaded prods json into memory...")
 
-		prods_array := (prods["prods"]).([]interface{})
+		prods_array := (prods["prods"]).([]any)
 		num_prods := len(prods_array)
 
 		// Track which groups have been created to avoid duplicates
@@ -170,7 +170,7 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 		// Single pass: import prods and groups together
 		tx := db.db.Begin()
 		for i, iprod := range prods_array {
-			prod := iprod.(map[string]interface{})
+			prod := iprod.(map[string]any)
 			pid, err := strconv.Atoi(prod["id"].(string))
 			if err != nil {
 				log.Printf("wtf id %s", prod["id"])
@@ -206,9 +206,9 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 
 			var video string
 			if dlinks, have := prod["downloadLinks"]; have {
-				array := dlinks.([]interface{})
+				array := dlinks.([]any)
 				for _, jlink := range array {
-					link := jlink.(map[string]interface{})
+					link := jlink.(map[string]any)
 					ltype := strings.ToLower(link["type"].(string))
 					if strings.Contains(ltype, "youtube") {
 						video = link["link"].(string)
@@ -241,9 +241,9 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 			}
 
 			// Process groups: create new ones and associate with prod
-			jgroups := prod["groups"].([]interface{})
+			jgroups := prod["groups"].([]any)
 			for _, jgroup := range jgroups {
-				group := jgroup.(map[string]interface{})
+				group := jgroup.(map[string]any)
 				gidStr, ok := group["id"].(string)
 				if !ok {
 					continue

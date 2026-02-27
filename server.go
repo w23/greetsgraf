@@ -25,7 +25,7 @@ func respondErrJson(w http.ResponseWriter, status int, err error) {
 	w.Write([]byte(response))
 }
 
-func respondJson(w http.ResponseWriter, status int, payload interface{}) {
+func respondJson(w http.ResponseWriter, status int, payload any) {
 	response, err := json.Marshal(payload)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)

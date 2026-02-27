@@ -108,7 +108,7 @@ func makeRequest[T any](t *testing.T, url string, expectedStatus int) T {
 	return result
 }
 
-func makeRequestWithBody[T any](t *testing.T, url string, method string, body interface{}, expectedStatus int) T {
+func makeRequestWithBody[T any](t *testing.T, url string, method string, body any, expectedStatus int) T {
 	t.Helper()
 
 	jsonBody, err := json.Marshal(body)
