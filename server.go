@@ -75,9 +75,9 @@ func (c *Database) findProd(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	pid := ctx.Value("prod_id")
+	prodID := ctx.Value("prod_id")
 
-	prod, err := c.GetProd(pid)
+	prod, err := c.GetProd(prodID)
 	if err != nil {
 		// TODO proper error status
 		respondJson(w, http.StatusInternalServerError, struct{}{})
@@ -157,9 +157,9 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	prod_id := ctx.Value("prod_id")
+	prodID := ctx.Value("prod_id")
 
-	greets, err := c.GetProdGreets(prod_id)
+	greets, err := c.GetProdGreets(prodID)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -170,9 +170,9 @@ func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	group_id := ctx.Value("group_id")
+	groupID := ctx.Value("group_id")
 
-	greets, err := c.GetGroupGreets(group_id)
+	greets, err := c.GetGroupGreets(groupID)
 	if err != nil {
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
@@ -254,26 +254,26 @@ func (c *Database) groupsGreeted(w http.ResponseWriter, r *http.Request) {
 
 func ProdContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		prod_id, err := strconv.Atoi(chi.URLParam(r, "id"))
+		prodID, err := strconv.Atoi(chi.URLParam(r, "id"))
 		if err != nil {
 			respondErrJson(w, http.StatusBadRequest, err)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "prod_id", prod_id)
+		ctx := context.WithValue(r.Context(), "prod_id", prodID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func GroupContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		group_id, err := strconv.Atoi(chi.URLParam(r, "id"))
+		groupID, err := strconv.Atoi(chi.URLParam(r, "id"))
 		if err != nil {
 			respondErrJson(w, http.StatusBadRequest, err)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "group_id", group_id)
+		ctx := context.WithValue(r.Context(), "group_id", groupID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

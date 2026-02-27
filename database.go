@@ -160,8 +160,8 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 
 		log.Printf("Loaded prods json into memory...")
 
-		prods_array := (prods["prods"]).([]any)
-		num_prods := len(prods_array)
+		prodsArray := (prods["prods"]).([]any)
+		numProds := len(prodsArray)
 
 		// Track which groups have been created to avoid duplicates
 		createdGroups := make(map[uint]bool)
@@ -169,8 +169,8 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 
 		// Single pass: import prods and groups together
 		tx := db.db.Begin()
-		for i, iprod := range prods_array {
-			prod := iprod.(map[string]any)
+		for i, jprod := range prodsArray {
+			prod := jprod.(map[string]any)
 			pid, err := strconv.Atoi(prod["id"].(string))
 			if err != nil {
 				log.Printf("wtf id %s", prod["id"])
@@ -183,11 +183,11 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 			var year, month int
 
 			if found && jdate != nil {
-				date_string := jdate.(string)
-				year, month, err = parsePouetDate(date_string)
+				dateStr := jdate.(string)
+				year, month, err = parsePouetDate(dateStr)
 				// TODO: for missing/invalid dates try to parse manually, or refer to party_year
 				if err != nil {
-					log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], date_string, err)
+					log.Printf("Prod %d:%s: cannot parse '%+v' as date: %+v", pid, prod["name"], dateStr, err)
 					continue
 				}
 			} else {
@@ -195,13 +195,13 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 			}
 
 			rank, _ := strconv.Atoi(prod["rank"].(string))
-			voteup, _ := strconv.Atoi(prod["voteup"].(string))
-			votepig, _ := strconv.Atoi(prod["votepig"].(string))
-			votedown, _ := strconv.Atoi(prod["votedown"].(string))
+			voteUp, _ := strconv.Atoi(prod["voteup"].(string))
+			votePig, _ := strconv.Atoi(prod["votepig"].(string))
+			voteDown, _ := strconv.Atoi(prod["votedown"].(string))
 
 			var demozoo int
-			if json_demozoo, have_demozoo := prod["demozoo"]; have_demozoo && json_demozoo != nil {
-				demozoo, _ = strconv.Atoi(json_demozoo.(string))
+			if jsonDemozoo, haveDemozoo := prod["demozoo"]; haveDemozoo && jsonDemozoo != nil {
+				demozoo, _ = strconv.Atoi(jsonDemozoo.(string))
 			}
 
 			var video string
@@ -209,12 +209,12 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 				array := dlinks.([]any)
 				for _, jlink := range array {
 					link := jlink.(map[string]any)
-					ltype := strings.ToLower(link["type"].(string))
-					if strings.Contains(ltype, "youtube") {
+					linkType := strings.ToLower(link["type"].(string))
+					if strings.Contains(linkType, "youtube") {
 						video = link["link"].(string)
 						break
 					}
-					if strings.Contains(ltype, "vimeo") {
+					if strings.Contains(linkType, "vimeo") {
 						video = link["link"].(string)
 						break
 					}
@@ -232,9 +232,9 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 				Year:       year,
 				Month:      month,
 				Rank:       rank,
-				VoteUp:     voteup,
-				VoteDown:   votedown,
-				VotePig:    votepig,
+				VoteUp:     voteUp,
+				VoteDown:   voteDown,
+				VotePig:    votePig,
 				Demozoo:    demozoo,
 				Video:      video,
 				Screenshot: screenshot,
@@ -275,7 +275,7 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 			tx.Create(&dbprod)
 
 			if (i+1)%1000 == 0 {
-				log.Printf("Processed %d / %d", i+1, num_prods)
+				log.Printf("Processed %d / %d", i+1, numProds)
 			}
 		}
 		tx.Commit()
@@ -299,10 +299,10 @@ func (db *Database) FindGroups(name string) ([]Group, error) {
 	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
 	// } else
 	if len(groups) < limit {
-		var like_groups []Group
-		db.db.Limit(limit-len(groups)).Find(&like_groups, "name LIKE ?", "%"+name+"%")
-		for i := range like_groups {
-			gl := &like_groups[i]
+		var likeGroups []Group
+		db.db.Limit(limit-len(groups)).Find(&likeGroups, "name LIKE ?", "%"+name+"%")
+		for i := range likeGroups {
+			gl := &likeGroups[i]
 			found := false
 			for j := range groups {
 				if groups[j].ID == gl.ID {
@@ -337,10 +337,10 @@ func (db *Database) FindProds(name string) ([]Prod, error) {
 	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
 	//} else
 	if len(prods) < limit {
-		var like_prods []Prod
-		db.db.Preload("Groups").Limit(limit-len(prods)).Find(&like_prods, "name LIKE ?", "%"+name+"%")
-		for i := range like_prods {
-			gl := &like_prods[i]
+		var likeProds []Prod
+		db.db.Preload("Groups").Limit(limit-len(prods)).Find(&likeProds, "name LIKE ?", "%"+name+"%")
+		for i := range likeProds {
+			gl := &likeProds[i]
 			found := false
 			for j := range prods {
 				if prods[j].ID == gl.ID {
