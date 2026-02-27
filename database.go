@@ -31,7 +31,6 @@ type Prod struct {
 	Name       string `gorm:"index"`
 	Year       int    `gorm:"index"`
 	Month      int    `gorm:"index"`
-	Day        int    `gorm:"index"`
 	Video      string
 	Rank       int
 	VoteUp     int
@@ -232,7 +231,6 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 				Name:       name,
 				Year:       year,
 				Month:      month,
-				Day:        0,
 				Rank:       rank,
 				VoteUp:     voteup,
 				VoteDown:   votedown,

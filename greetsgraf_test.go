@@ -221,11 +221,11 @@ func TestPouetData(t *testing.T) {
 		t.Logf("Prod get response for ID 1: %v", prodRespBody)
 
 		assert.Equal(t, prodRespBody, ProdGetResponse{
-			ID:         uint(1),
-			Name:       "Astral Blur",
-			Year:       1997,
-			Month:      3,
-			Day:        0,
+			ID:    uint(1),
+			Name:  "Astral Blur",
+			Year:  1997,
+			Month: 3,
+
 			Video:      "https://www.youtube.com/watch?v=eZyLSHyUGBY",
 			Rank:       712,
 			VoteUp:     84,
@@ -245,11 +245,11 @@ func TestPouetData(t *testing.T) {
 		t.Logf("Prod get response for ID 2: %v", prodRespBody2)
 
 		assert.Equal(t, prodRespBody2, ProdGetResponse{
-			ID:         uint(2),
-			Name:       "Jizz",
-			Year:       1997,
-			Month:      7,
-			Day:        0,
+			ID:    uint(2),
+			Name:  "Jizz",
+			Year:  1997,
+			Month: 7,
+
 			Video:      "https://www.youtube.com/watch?v=iXgseVYvhek",
 			Rank:       364,
 			VoteUp:     104,
@@ -494,7 +494,7 @@ func TestGreets(t *testing.T) {
 		groupGreets := makeRequest[[]GroupGreetsResponse](t, server.URL+"/v1/groups/1/greets", http.StatusOK)
 		expectedGroupGreets := []GroupGreetsResponse{
 			{
-				Prod:      Prod{ID: prodToGreet, Name: "Astral Blur", Year: 1997, Month: 3, Day: 0, Video: "https://www.youtube.com/watch?v=eZyLSHyUGBY", Rank: 712, VoteUp: 84, VotePig: 18, VoteDown: 5, Demozoo: 11, Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg", Groups: []Group{{ID: 1, Name: "The Black Lotus", Disambiguation: "", ProdsCount: 67, GreetsCount: 1}}},
+				Prod:      Prod{ID: prodToGreet, Name: "Astral Blur", Year: 1997, Month: 3, Video: "https://www.youtube.com/watch?v=eZyLSHyUGBY", Rank: 712, VoteUp: 84, VotePig: 18, VoteDown: 5, Demozoo: 11, Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg", Groups: []Group{{ID: 1, Name: "The Black Lotus", Disambiguation: "", ProdsCount: 67, GreetsCount: 1}}},
 				Reference: "Test greet",
 			},
 		}

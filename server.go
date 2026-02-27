@@ -102,7 +102,6 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		Name       string
 		Year       int
 		Month      int
-		Day        int
 		Video      string
 		Rank       int
 		VoteUp     int
@@ -117,7 +116,6 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		Name:       prod.Name,
 		Year:       prod.Year,
 		Month:      prod.Month,
-		Day:        prod.Day,
 		Video:      prod.Video,
 		Rank:       prod.Rank,
 		VoteUp:     prod.VoteUp,
