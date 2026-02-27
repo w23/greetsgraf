@@ -198,6 +198,23 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 		prods_array := (prods["prods"]).([]interface{})
 		num_prods := len(prods_array)
 
+		// Build a set of valid group IDs from the groups import
+		validGroupIDs := make(map[uint]bool)
+		{
+			groups, err := readJsonGz(groupsfile)
+			if err != nil {
+				log.Fatalf("Unable to read groups from file %s: %v", groupsfile, err)
+			}
+			groups_array := (groups["groups"]).([]interface{})
+			for _, g := range groups_array {
+				group := g.(map[string]interface{})
+				pouet_id, err := strconv.ParseInt(group["id"].(string), 10, 64)
+				if err == nil {
+					validGroupIDs[uint(pouet_id)] = true
+				}
+			}
+		}
+
 		tx := db.db.Begin()
 		for i, iprod := range prods_array {
 			prod := iprod.(map[string]interface{})
@@ -271,7 +288,7 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 				Screenshot: screenshot,
 			}
 
-			// Associate with groups
+			// Associate with groups (only if group was imported)
 			jgroups := prod["groups"].([]interface{})
 			for _, jgroup := range jgroups {
 				group := jgroup.(map[string]interface{})
@@ -281,7 +298,10 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) {
 					continue
 				}
 
-				dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
+				// Only associate with groups that were imported from the groups file
+				if validGroupIDs[uint(gid)] {
+					dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
+				}
 			}
 
 			tx.Create(&dbprod)

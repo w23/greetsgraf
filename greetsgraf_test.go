@@ -171,13 +171,13 @@ func TestPouetData(t *testing.T) {
 
 	statsResponse := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
 
-	assert.Equal(t, statsResponse, StatsResponse{
+	assert.Equal(t, StatsResponse{
 		TotalGreets:     0,
 		TotalProds:      431,
-		TotalGroups:     65,
+		TotalGroups:     8,
 		ProdsWithGreets: 0,
 		GreetedGroups:   0,
-	})
+	}, statsResponse)
 
 	t.Run("GroupSearchTheBlackLotus", func(t *testing.T) {
 		groups1 := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=The%20Black%20Lotus", http.StatusOK)
@@ -213,7 +213,7 @@ func TestPouetData(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=nonexistentgroup12345", http.StatusOK)
 		t.Logf("Group search response for non-existent group: %v", groups)
 
-		assert.Equal(t, groups, []GroupSearchResponse{})
+		assert.Equal(t, []GroupSearchResponse{}, groups)
 	})
 
 	t.Run("ProdGetID1", func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestPouetData(t *testing.T) {
 		groups := makeRequest[[]GroupSearchResponse](t, server.URL+"/v1/groups/search?name=*invalid*", http.StatusOK)
 		t.Logf("Group search with invalid FTS query: %v", groups)
 
-		assert.Equal(t, groups, []GroupSearchResponse{})
+		assert.Equal(t, []GroupSearchResponse{}, groups)
 	})
 
 	t.Run("GroupSearchEmptyName", func(t *testing.T) {
@@ -420,7 +420,7 @@ func TestGreets(t *testing.T) {
 	expectedStats := StatsResponse{
 		TotalGreets:     0,
 		TotalProds:      431,
-		TotalGroups:     65,
+		TotalGroups:     8,
 		ProdsWithGreets: 0,
 		GreetedGroups:   0,
 	}
