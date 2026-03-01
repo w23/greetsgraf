@@ -1,17 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupDatabase(t *testing.T, name string) Database {
+func setupTestDatabaseWithPouetData(t *testing.T) Database {
 	t.Helper()
 
 	db, err := SetupDatabase(SetupArgs{
-		DBFile:      ":memory:?cache=shared",
+		DBFile:      fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name()),
 		Create:      true,
 		PouetProds:  "test/pouet-prods.json.gz",
 		PouetGroups: "test/pouet-groups.json.gz",
@@ -29,32 +30,32 @@ const elevatedID = uint(52938)
 const rgbaID = uint(697)
 const tbcID = uint(1623)
 
+func TestNonExistingProdFile(t *testing.T) {
+	_, err := SetupDatabase(SetupArgs{
+		DBFile:      fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name()),
+		Create:      true,
+		PouetProds:  "test/non-existing-prods.json.gz",
+		PouetGroups: "test/pouet-groups.json.gz",
+		BuildIndex:  false,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unable to read prods from file")
+}
+
+func TestNonExistingGroupFile(t *testing.T) {
+	_, err := SetupDatabase(SetupArgs{
+		DBFile:      fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name()),
+		Create:      true,
+		PouetProds:  "test/pouet-prods.json.gz",
+		PouetGroups: "test/non-existing-groups.json.gz",
+		BuildIndex:  false,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unable to read groups from file")
+}
+
 func TestPouetImport(t *testing.T) {
-	t.Run("NonExistingProdFile", func(t *testing.T) {
-		_, err := SetupDatabase(SetupArgs{
-			DBFile:      ":memory:?cache=shared",
-			Create:      true,
-			PouetProds:  "test/non-existing-prods.json.gz",
-			PouetGroups: "test/pouet-groups.json.gz",
-			BuildIndex:  false,
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unable to read prods from file")
-	})
-
-	t.Run("NonExistingGroupFile", func(t *testing.T) {
-		_, err := SetupDatabase(SetupArgs{
-			DBFile:      ":memory:?cache=shared",
-			Create:      true,
-			PouetProds:  "test/pouet-prods.json.gz",
-			PouetGroups: "test/non-existing-groups.json.gz",
-			BuildIndex:  false,
-		})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unable to read groups from file")
-	})
-
-	db := setupDatabase(t, "pouet-import")
+	db := setupTestDatabaseWithPouetData(t)
 
 	// Check that basic loading went fine
 	t.Run("DebrisWasImported", func(t *testing.T) {

@@ -156,17 +156,15 @@ func makeDeleteRequest[T any](t *testing.T, url string, expectedStatus int) T {
 	return result
 }
 
-func TestPouetData(t *testing.T) {
-	db, err := SetupDatabase(SetupArgs{
-		DBFile:      ":memory:?cache=shared",
-		Create:      true,
-		PouetProds:  "./test/pouet-prods.json.gz",
-		PouetGroups: "./test/pouet-groups.json.gz",
-		BuildIndex:  true,
-	})
-	require.NoError(t, err)
+func setupTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
 
-	server := httptest.NewServer(Server(db, ""))
+	db := setupTestDatabaseWithPouetData(t)
+	return httptest.NewServer(Server(db, ""))
+}
+
+func TestPouetData(t *testing.T) {
+	server := setupTestServer(t)
 	defer server.Close()
 
 	statsResponse := makeRequest[StatsResponse](t, server.URL+"/v1/stats", http.StatusOK)
@@ -440,16 +438,7 @@ func TestPouetData(t *testing.T) {
 }
 
 func TestGreets(t *testing.T) {
-	db, err := SetupDatabase(SetupArgs{
-		DBFile:      ":memory:?cache=shared",
-		Create:      true,
-		PouetProds:  "./test/pouet-prods.json.gz",
-		PouetGroups: "./test/pouet-groups.json.gz",
-		BuildIndex:  true,
-	})
-	require.NoError(t, err)
-
-	server := httptest.NewServer(Server(db, ""))
+	server := setupTestServer(t)
 	defer server.Close()
 
 	expectedStats := StatsResponse{

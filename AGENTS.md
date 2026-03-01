@@ -34,7 +34,7 @@ Note:
 ## Testing
 ### Running Tests
 
-All tests use in-memory SQLite database (`:memory:?cache=shared`) with FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests, as regular `go test` without extra arguments is guaranteed to fail.
+All tests use in-memory SQLite database with unique names per test (e.g., `file:TestName?mode=memory&cache=shared`) and FTS5 support. This requires extra arguments for the `go test` command. Use `go-test.sh` helper script to run tests, as regular `go test` without extra arguments is guaranteed to fail.
 
 ### Making new tests
 
@@ -49,8 +49,8 @@ assert.Equal(t, 420, stats.TotalProds)
 ```
 
 Top level (`func Test...`) tests should:
-1. Use `SetupDatabase()` with `SetupArgs` to initialize the database
-2. Use `httptest.NewServer(Server(db))` to create a test HTTP server
+1. Use `setupTestDatabaseWithPouetData()` function to create a database with test Pouet data.
+2. Use `setupTestServer()` to create a test HTTP server with test Pouet data.
 
 Test data files for Pouet database contents are available in `./test/` directory:
 - `pouet-groups.json.gz` - test group data
