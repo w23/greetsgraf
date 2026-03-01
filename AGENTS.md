@@ -58,9 +58,9 @@ Test data files for Pouet database contents are available in `./test/` directory
 
 Prefer minimizing the number of top level tests. Include many similar-themed subtests within one top level test.
 
-Subtest MUST always use the same database and server created at the top of the toplevel test. Subtests MUST NOT create their own database or server.
+Subtest MUST always use the same database and server created at the top of the toplevel test.
 
-Subtest names MUST only consist of alphanumeric latin characters. They MUST NOT contain spaces or special symbols or unicode.
+Subtest names MUST only consist of alphanumeric latin characters only.
 
 ## Code Style Guidelines
 
@@ -81,7 +81,6 @@ import (
     "net/http"
 
     "github.com/go-chi/chi/v5"
-    "gorm.io/gorm"
 )
 ```
 
@@ -92,7 +91,7 @@ import (
 - Constants: PascalCase
 
 ### Type Declarations
-- Use GORM for ORM operations
+- Use database/sql for database operations
 - Define response types explicitly for API contracts
 - Use pointers for optional values in structs
 - Use `any` instead of `interface{}`
@@ -100,14 +99,14 @@ import (
 ### Error Handling
 - Log errors with context: `log.Printf("Error: %v", err)`
 - Use `respondErrJson` for HTTP errors
-- Check GORM errors: `if db.Error != nil { ... }`
+- Check database errors from Query/QueryRow/Exec/Prepare calls
 - Return early on errors
 
 ### Database
-- Use GORM for all database operations
+- Use database/sql for all database operations
 - Begin transactions with `tx := db.Begin()`
-- Commit with `tx.Commit()` or rollback with `tx.Rollback()`
-- Use foreign key constraints and indexes where appropriate
+- Commit with `tx.Commit()` or rollback with `defer tx.Rollback()`
+- Use prepared statements for repeated queries
 
 ## API Conventions
 - JSON responses with `Content-Type: application/json`
@@ -130,9 +129,8 @@ import (
 - Run `go fmt ./...` for formatting
 
 ### Model Definitions
-- Use GORM tags for database mapping
 - Define response types explicitly for API contracts
-- Use `gorm:"-"` tag for computed/derived fields not stored in DB
+- Use `gorm:"-"` tag for computed/derived fields not stored in DB (for API compatibility)
 
 ### HTTP Handlers
 - Context functions (`ProdContext`, `GroupContext`) extract URL parameters
@@ -141,7 +139,7 @@ import (
 
 ### Database Operations
 - Use transactions for related operations: `tx := db.Begin()`
-- Always check `db.Error` after GORM operations
+- Always check database errors from operations
 - Use `tx.Commit()` on success, `tx.Rollback()` on error
 
 ### JSON Handling

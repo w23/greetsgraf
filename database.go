@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,26 +12,22 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Group struct {
-	ID             uint   `gorm:"primaryKey"`
-	Name           string `gorm:"index"`
-	Disambiguation string `gorm:"index"`
-	Prods          []Prod `gorm:"many2many:group_prods;"`
-	//Greeted []Greet `gorm:"many2many:group_greeted;"`
-	//Greets []Greet `gorm:"many2many:group_greets;"`
-	ProdsCount  int64 `gorm:"-"`
-	GreetsCount int64 `gorm:"-"`
+	ID             uint
+	Name           string
+	Disambiguation string
+	ProdsCount     int64 `gorm:"-"`
+	GreetsCount    int64 `gorm:"-"`
 }
 
 type Prod struct {
-	ID         uint   `gorm:"primaryKey"`
-	Name       string `gorm:"index"`
-	Year       int    `gorm:"index"`
-	Month      int    `gorm:"index"`
+	ID         uint
+	Name       string
+	Year       int
+	Month      int
 	Video      string
 	Rank       int
 	VoteUp     int
@@ -38,18 +35,19 @@ type Prod struct {
 	VoteDown   int
 	Demozoo    int
 	Screenshot string
-	// TODO: credits
-	Groups []Group `gorm:"many2many:group_prods;"`
-	Greets []Greet
+	Groups     []Group `gorm:"-"`
+	Greets     []Greet `gorm:"-"`
 }
 
 type Greet struct {
-	gorm.Model
-	UserID    uint `gorm:"index"`
+	ID        uint
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt time.Time
+	UserID    uint
 	Reference string
-	// ??? GroupName string
-	ProdID    uint `gorm:"uniqueIndex:greets_prod_group"`
-	GreeteeID uint `gorm:"uniqueIndex:greets_prod_group"` //;many2many:group_greeted;"`
+	ProdID    uint
+	GreeteeID uint
 }
 
 type ProdGreet struct {
@@ -64,35 +62,87 @@ type GroupGreet struct {
 }
 
 type Database struct {
-	db *gorm.DB
+	db *sql.DB
 }
 
 func DatabaseOpen(datafile string) (Database, error) {
-	db, err := gorm.Open(sqlite.Open(datafile), &gorm.Config{})
-
+	db, err := sql.Open("sqlite3", datafile)
 	if err != nil {
-		return Database{nil}, fmt.Errorf("open database file %s: %w", datafile, err)
+		return Database{}, fmt.Errorf("open database file %s: %w", datafile, err)
 	}
 
-	db.AutoMigrate(&Group{})
-	db.AutoMigrate(&Prod{})
-	db.AutoMigrate(&Greet{})
+	return Database{db: db}, err
+}
 
-	return Database{db}, err
+func (db *Database) createTables() error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS groups (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL,
+		disambiguation TEXT
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
+	CREATE INDEX IF NOT EXISTS idx_groups_disambiguation ON groups(disambiguation);
+
+	CREATE TABLE IF NOT EXISTS prods (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL,
+		year INTEGER,
+		month INTEGER,
+		video TEXT,
+		rank INTEGER,
+		voteup INTEGER,
+		votepig INTEGER,
+		votedown INTEGER,
+		demozoo INTEGER,
+		screenshot TEXT
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_prods_name ON prods(name);
+	CREATE INDEX IF NOT EXISTS idx_prods_year ON prods(year);
+	CREATE INDEX IF NOT EXISTS idx_prods_month ON prods(month);
+
+	CREATE TABLE IF NOT EXISTS group_prods (
+		group_id INTEGER NOT NULL,
+		prod_id INTEGER NOT NULL,
+		PRIMARY KEY (group_id, prod_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_group_prods_prod_id ON group_prods(prod_id);
+
+	CREATE TABLE IF NOT EXISTS greets (
+		id INTEGER PRIMARY KEY,
+		created_at TIMESTAMP,
+		updated_at TIMESTAMP,
+		deleted_at TIMESTAMP,
+		user_id INTEGER,
+		reference TEXT,
+		prod_id INTEGER NOT NULL,
+		greetee_id INTEGER NOT NULL,
+		UNIQUE (prod_id, greetee_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_greets_prod_id ON greets(prod_id);
+	CREATE INDEX IF NOT EXISTS idx_greets_greetee_id ON greets(greetee_id);
+	`
+
+	_, err := db.db.Exec(schema)
+	return err
 }
 
 func (db *Database) BuildIndex() {
-	if err := db.db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)").Error; err != nil {
+	if _, err := db.db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)"); err != nil {
 		log.Fatalf("Failed to create FTS index for groups: %+v", err)
 	}
-	if err := db.db.Exec("INSERT INTO groups_fts (name, id) SELECT name, id FROM groups").Error; err != nil {
+	if _, err := db.db.Exec("INSERT INTO groups_fts (name, id) SELECT name, id FROM groups"); err != nil {
 		log.Fatalf("Failed to populate FTS index for groups: %+v", err)
 	}
 
-	if err := db.db.Exec("CREATE VIRTUAL TABLE prods_fts USING fts5(name, id)").Error; err != nil {
+	if _, err := db.db.Exec("CREATE VIRTUAL TABLE prods_fts USING fts5(name, id)"); err != nil {
 		log.Fatalf("Failed to create FTS index for prods: %+v", err)
 	}
-	if err := db.db.Exec("INSERT INTO prods_fts (name, id) SELECT name, id FROM prods").Error; err != nil {
+	if _, err := db.db.Exec("INSERT INTO prods_fts (name, id) SELECT name, id FROM prods"); err != nil {
 		log.Fatalf("Failed to populate FTS index for prods: %+v", err)
 	}
 }
@@ -149,9 +199,9 @@ func (db *Database) ImportPouet(prodsfile string, groupsfile string) error {
 		return fmt.Errorf("when creating a new db, pouet data dumps are needed")
 	}
 
-	db.db.AutoMigrate(&Group{})
-	db.db.AutoMigrate(&Prod{})
-	db.db.AutoMigrate(&Greet{})
+	if err := db.createTables(); err != nil {
+		return fmt.Errorf("create tables: %w", err)
+	}
 
 	log.Printf("Importing prods...")
 	if err := db.importProds(prodsfile); err != nil {
@@ -186,8 +236,33 @@ func (db *Database) importProds(prodsfile string) error {
 	groupCount := 0
 
 	// Single pass: import prods and groups together
-	tx := db.db.Begin()
-	defer tx.Rollback()
+	tx, err := db.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+
+	prodStmt, err := tx.Prepare(`INSERT INTO prods (id, name, year, month, video, rank, voteup, votepig, votedown, demozoo, screenshot)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("prepare prod insert: %w", err)
+	}
+	defer prodStmt.Close()
+
+	groupStmt, err := tx.Prepare(`INSERT INTO groups (id, name, disambiguation) VALUES (?, ?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("prepare group insert: %w", err)
+	}
+	defer groupStmt.Close()
+
+	assocStmt, err := tx.Prepare(`INSERT OR IGNORE INTO group_prods (group_id, prod_id) VALUES (?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("prepare assoc insert: %w", err)
+	}
+	defer assocStmt.Close()
+
 	for i, jprod := range prodsArray {
 		prod, ok := jprod.(map[string]any)
 		if !ok {
@@ -276,18 +351,10 @@ func (db *Database) importProds(prodsfile string) error {
 			screenshot, _ = shot.(string)
 		}
 
-		dbprod := Prod{
-			ID:         uint(pid),
-			Name:       name,
-			Year:       year,
-			Month:      month,
-			Rank:       rank,
-			VoteUp:     voteUp,
-			VoteDown:   voteDown,
-			VotePig:    votePig,
-			Demozoo:    demozoo,
-			Video:      video,
-			Screenshot: screenshot,
+		_, err = prodStmt.Exec(pid, name, year, month, video, rank, voteUp, votePig, voteDown, demozoo, screenshot)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("create prod %d:%s: %w", pid, name, err)
 		}
 
 		// Process groups: create new ones and associate with prod
@@ -315,12 +382,9 @@ func (db *Database) importProds(prodsfile string) error {
 			if !createdGroups[uint(gid)] {
 				gname, _ := group["name"].(string)
 				disambiguation, _ := group["disambiguation"].(string)
-				dbgroup := Group{
-					ID:             uint(gid),
-					Name:           gname,
-					Disambiguation: disambiguation,
-				}
-				if err := tx.Create(&dbgroup).Error; err != nil {
+				_, err = groupStmt.Exec(uint(gid), gname, disambiguation)
+				if err != nil {
+					tx.Rollback()
 					return fmt.Errorf("create group %d:%s: %w", gid, gname, err)
 				}
 				createdGroups[uint(gid)] = true
@@ -328,18 +392,19 @@ func (db *Database) importProds(prodsfile string) error {
 			}
 
 			// Associate with prod
-			dbprod.Groups = append(dbprod.Groups, Group{ID: uint(gid)})
-		}
-
-		if err := tx.Create(&dbprod).Error; err != nil {
-			return fmt.Errorf("create prod %d:%s: %w", pid, name, err)
+			_, err = assocStmt.Exec(uint(gid), pid)
+			if err != nil {
+				tx.Rollback()
+				return fmt.Errorf("associate group %d with prod %d: %w", gid, pid, err)
+			}
 		}
 
 		if (i+1)%1000 == 0 {
 			log.Printf("Processed %d / %d", i+1, numProds)
 		}
 	}
-	if err := tx.Commit().Error; err != nil {
+
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit prods: %w", err)
 	}
 
@@ -364,8 +429,26 @@ func (db *Database) importGroups(groupsfile string) error {
 	updatedCount := 0
 	createdCount := 0
 
-	tx := db.db.Begin()
+	tx, err := db.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
 	defer tx.Rollback()
+
+	updateStmt, err := tx.Prepare(`UPDATE groups SET name = ?, disambiguation = ? WHERE id = ?`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("prepare group update: %w", err)
+	}
+	defer updateStmt.Close()
+
+	insertStmt, err := tx.Prepare(`INSERT INTO groups (id, name, disambiguation) VALUES (?, ?, ?)`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("prepare group insert: %w", err)
+	}
+	defer insertStmt.Close()
+
 	for i, jgroup := range groupsArray {
 		group, ok := jgroup.(map[string]any)
 		if !ok {
@@ -387,37 +470,42 @@ func (db *Database) importGroups(groupsfile string) error {
 		disambiguation, _ := group["disambiguation"].(string)
 
 		// Check if group exists
-		var dbgroup Group
-		result := tx.First(&dbgroup, "id = ?", uint(gid))
-		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
+		var exists bool
+		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", uint(gid)).Scan(&exists)
+		if err != nil {
+			log.Printf("Error checking group %d: %v", gid, err)
+			continue
+		}
+
+		if !exists {
 			// Create new group
-			dbgroup = Group{
-				ID:             uint(gid),
-				Name:           name,
-				Disambiguation: disambiguation,
-			}
-			if err := tx.Create(&dbgroup).Error; err != nil {
+			_, err = insertStmt.Exec(uint(gid), name, disambiguation)
+			if err != nil {
+				tx.Rollback()
 				return fmt.Errorf("create group %d:%s: %w", gid, name, err)
 			}
 			createdCount++
-		} else if result.Error != nil {
-			log.Printf("Error finding group %d: %v", gid, result.Error)
-			continue
 		} else {
 			// Update existing group
-			dbgroup.Name = name
-			dbgroup.Disambiguation = disambiguation
-			if err := tx.Save(&dbgroup).Error; err != nil {
+			result, err := updateStmt.Exec(name, disambiguation, uint(gid))
+			if err != nil {
+				tx.Rollback()
 				return fmt.Errorf("update group %d:%s: %w", gid, name, err)
 			}
-			updatedCount++
+			rows, _ := result.RowsAffected()
+			if rows == 0 {
+				createdCount++
+			} else {
+				updatedCount++
+			}
 		}
 
 		if (i+1)%1000 == 0 {
 			log.Printf("Processed %d / %d groups", i+1, numGroups)
 		}
 	}
-	if err := tx.Commit().Error; err != nil {
+
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit groups: %w", err)
 	}
 
@@ -428,67 +516,130 @@ func (db *Database) importGroups(groupsfile string) error {
 func (db *Database) FindGroups(name string) ([]Group, error) {
 	const limit = 10
 
-	var groups []Group
-	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
-	/*db := */
-	db.db.Table("groups").Joins("INNER JOIN groups_fts ON groups_fts.id = groups.id").Where("groups_fts MATCH ?", name).Order("rank").Limit(limit).Find(&groups)
-	// if db.Error == gorm.ErrRecordNotFound {
-	// 	respondJson(w, http.StatusNotFound, struct{}{})
-	// } else if db.Error != nil {
-	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
-	// } else
-	if len(groups) < limit {
-		var likeGroups []Group
-		db.db.Limit(limit-len(groups)).Find(&likeGroups, "name LIKE ?", "%"+name+"%")
-		for i := range likeGroups {
-			gl := &likeGroups[i]
+	groups := make([]Group, 0, limit)
+
+	// Try FTS first
+	rows, err := db.db.Query(`
+		SELECT g.id, g.name, g.disambiguation
+		FROM groups g
+		INNER JOIN groups_fts f ON f.id = g.id
+		WHERE f.match ?
+		ORDER BY f.rank
+		LIMIT ?`, name, limit)
+
+	ftsSuccess := false
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var g Group
+			if err := rows.Scan(&g.ID, &g.Name, &g.Disambiguation); err != nil {
+				return nil, fmt.Errorf("scan group: %w", err)
+			}
+			groups = append(groups, g)
+		}
+		ftsSuccess = true
+	}
+
+	// If FTS failed or returned no results, try LIKE
+	if !ftsSuccess || len(groups) == 0 {
+		rows2, err := db.db.Query(`
+			SELECT id, name, disambiguation FROM groups
+			WHERE name LIKE ?
+			ORDER BY id
+			LIMIT ?`, "%"+name+"%", limit)
+		if err != nil {
+			return nil, fmt.Errorf("search groups: %w", err)
+		}
+		defer rows2.Close()
+		for rows2.Next() {
+			var g Group
+			if err := rows2.Scan(&g.ID, &g.Name, &g.Disambiguation); err != nil {
+				continue
+			}
+			// Check if already in results (for FTS fallback case)
 			found := false
-			for j := range groups {
-				if groups[j].ID == gl.ID {
+			for _, existing := range groups {
+				if existing.ID == g.ID {
 					found = true
 					break
 				}
 			}
 			if !found {
-				groups = append(groups, *gl)
+				groups = append(groups, g)
 			}
 		}
 	}
 
 	for i := range groups {
-		groups[i].getCounts(db.db)
+		if err := groups[i].getCounts(db.db); err != nil {
+			log.Printf("getCounts for group %d: %v", groups[i].ID, err)
+		}
 	}
 
 	return groups, nil
 }
 
 func (db *Database) FindProds(name string) ([]Prod, error) {
-	query := db.db.Table("prods").Joins("INNER JOIN prods_fts ON prods_fts.id = prods.id").Where("prods_fts MATCH ?", name).Order("prods_fts.rank")
-
 	const limit = 10
 
-	var prods []Prod
-	query = query.Preload("Groups").Limit(limit).Find(&prods)
-	// FIXME FTS is very fragile. There are many inputs that will generate SQL errors. Let's just ignore any errors coming from it for now.
-	//if db.Error == gorm.ErrRecordNotFound {
-	// respondJson(w, http.StatusNotFound, struct{}{})
-	// } else if db.Error != nil {
-	// 	respondErrJson(w, http.StatusInternalServerError, db.Error)
-	//} else
-	if len(prods) < limit {
-		var likeProds []Prod
-		db.db.Preload("Groups").Limit(limit-len(prods)).Find(&likeProds, "name LIKE ?", "%"+name+"%")
-		for i := range likeProds {
-			gl := &likeProds[i]
+	prods := make([]Prod, 0, limit)
+
+	// Try FTS first
+	rows, err := db.db.Query(`
+		SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot,
+			   gp.group_id
+		FROM prods p
+		INNER JOIN prods_fts f ON f.id = p.id
+		INNER JOIN group_prods gp ON gp.prod_id = p.id
+		WHERE f.match ?
+		ORDER BY f.rank`, name)
+
+	ftsSuccess := false
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var p Prod
+			var groupID uint
+			if err := rows.Scan(&p.ID, &p.Name, &p.Year, &p.Month, &p.Video, &p.Rank, &p.VoteUp, &p.VotePig, &p.VoteDown, &p.Demozoo, &p.Screenshot, &groupID); err != nil {
+				return nil, fmt.Errorf("scan prod: %w", err)
+			}
+			p.Groups = append(p.Groups, Group{ID: groupID})
+			prods = append(prods, p)
+		}
+		ftsSuccess = true
+	}
+
+	// If FTS failed or returned no results, try LIKE
+	if !ftsSuccess || len(prods) == 0 {
+		rows2, err := db.db.Query(`
+			SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot,
+				   gp.group_id
+			FROM prods p
+			INNER JOIN group_prods gp ON gp.prod_id = p.id
+			WHERE p.name LIKE ?
+			ORDER BY p.id
+			LIMIT ?`, "%"+name+"%", limit)
+		if err != nil {
+			return nil, fmt.Errorf("search prods: %w", err)
+		}
+		defer rows2.Close()
+		for rows2.Next() {
+			var p Prod
+			var groupID uint
+			if err := rows2.Scan(&p.ID, &p.Name, &p.Year, &p.Month, &p.Video, &p.Rank, &p.VoteUp, &p.VotePig, &p.VoteDown, &p.Demozoo, &p.Screenshot, &groupID); err != nil {
+				continue
+			}
+			// Check if already in results (for FTS fallback case)
 			found := false
-			for j := range prods {
-				if prods[j].ID == gl.ID {
+			for _, existing := range prods {
+				if existing.ID == p.ID {
 					found = true
 					break
 				}
 			}
 			if !found {
-				prods = append(prods, *gl)
+				p.Groups = append(p.Groups, Group{ID: groupID})
+				prods = append(prods, p)
 			}
 		}
 	}
@@ -496,71 +647,175 @@ func (db *Database) FindProds(name string) ([]Prod, error) {
 	return prods, nil
 }
 
-func (g *Group) getCounts(db *gorm.DB) {
-	g.ProdsCount = db.Model(g).Association("Prods").Count()
-	db.Model(Greet{}).Where("greetee_id = ?", g.ID).Count(&g.GreetsCount)
+func (g *Group) getCounts(db *sql.DB) error {
+	var count int64
+	if err := db.QueryRow("SELECT COUNT(*) FROM prods p INNER JOIN group_prods gp ON gp.prod_id = p.id WHERE gp.group_id = ?", g.ID).Scan(&count); err != nil {
+		return fmt.Errorf("count prods for group %d: %w", g.ID, err)
+	}
+	g.ProdsCount = count
+
+	if err := db.QueryRow("SELECT COUNT(*) FROM greets WHERE greetee_id = ?", g.ID).Scan(&count); err != nil {
+		return fmt.Errorf("count greets for group %d: %w", g.ID, err)
+	}
+	g.GreetsCount = count
+
+	return nil
 }
 
-// TODO proper type for pid
-func (db *Database) GetProd(pid any) (Prod, error) {
+func (db *Database) GetProd(pid uint) (Prod, error) {
 	var prod Prod
-	query := db.db.Find(&prod, "id = ?", pid)
-	if query.Error == gorm.ErrRecordNotFound {
-		return prod, fmt.Errorf("not found")
-	} else if query.Error != nil {
-		return prod, fmt.Errorf("unknown db error: %w", query.Error)
+	row := db.db.QueryRow(`
+		SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot
+		FROM prods p WHERE p.id = ?`, pid)
+
+	if err := row.Scan(&prod.ID, &prod.Name, &prod.Year, &prod.Month, &prod.Video, &prod.Rank, &prod.VoteUp, &prod.VotePig, &prod.VoteDown, &prod.Demozoo, &prod.Screenshot); err != nil {
+		if err == sql.ErrNoRows {
+			return prod, fmt.Errorf("not found")
+		}
+		return prod, fmt.Errorf("unknown db error: %w", err)
 	}
 
-	db.db.Model(&prod).Association("Groups").Find(&prod.Groups)
-	db.db.Model(&prod).Association("Greets").Find(&prod.Greets)
+	// Load groups
+	rows, err := db.db.Query(`
+		SELECT g.id, g.name, g.disambiguation
+		FROM groups g
+		INNER JOIN group_prods gp ON gp.group_id = g.id
+		WHERE gp.prod_id = ?`, pid)
+	if err != nil {
+		return prod, fmt.Errorf("load groups for prod %d: %w", pid, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var group Group
+		if err := rows.Scan(&group.ID, &group.Name, &group.Disambiguation); err != nil {
+			return prod, fmt.Errorf("scan group: %w", err)
+		}
+		prod.Groups = append(prod.Groups, group)
+	}
+
+	// Load greets
+	rows, err = db.db.Query(`
+		SELECT gr.id, gr.reference, gr.greetee_id, g.name, g.disambiguation
+		FROM greets gr
+		INNER JOIN groups g ON g.id = gr.greetee_id
+		WHERE gr.prod_id = ?`, pid)
+	if err != nil {
+		return prod, fmt.Errorf("load greets for prod %d: %w", pid, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var greet Greet
+		var groupName, groupDisambiguation string
+		if err := rows.Scan(&greet.ID, &greet.Reference, &greet.GreeteeID, &groupName, &groupDisambiguation); err != nil {
+			return prod, fmt.Errorf("scan greet: %w", err)
+		}
+		prod.Greets = append(prod.Greets, greet)
+	}
 
 	return prod, nil
 }
 
-// TODO proper type for groupID
-func (db *Database) GetGroup(groupID any) (Group, error) {
-	var group Group
-	query := db.db.Find(&group, "ID = ?", groupID)
+type ProdWithGreetGroups struct {
+	Prod
+	GreetGroups []Group `gorm:"-"`
+}
 
-	if query.Error != nil {
-		return group, fmt.Errorf("find group id=%u: %w", groupID, query.Error)
+// Keep for API compatibility - returns same structure as before
+func (db *Database) GetGroup(groupID uint) (Group, error) {
+	var group Group
+	row := db.db.QueryRow(`SELECT id, name, disambiguation FROM groups WHERE id = ?`, groupID)
+
+	if err := row.Scan(&group.ID, &group.Name, &group.Disambiguation); err != nil {
+		if err == sql.ErrNoRows {
+			return group, fmt.Errorf("not found")
+		}
+		return group, fmt.Errorf("find group id=%d: %w", groupID, err)
 	}
 
 	return group, nil
 }
 
-func (db *Database) GetProdGreets(prodID any) ([]ProdGreet, error) {
+func (db *Database) GetProdGreets(prodID uint) ([]ProdGreet, error) {
 	var greets []ProdGreet
-	query := db.db.Table("greets").Select("greets.greetee_id as GreeteeID, groups.name as GreeteeName, greets.reference as Reference").Where("greets.prod_id = ?", prodID).Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Find(&greets)
+	rows, err := db.db.Query(`
+		SELECT gr.greetee_id, g.name, gr.reference
+		FROM greets gr
+		INNER JOIN groups g ON g.id = gr.greetee_id
+		WHERE gr.prod_id = ?`, prodID)
 
-	if query.Error != nil {
-		return []ProdGreet{}, fmt.Errorf("get greets for prod=%v: %w", prodID, query.Error)
+	if err != nil {
+		return []ProdGreet{}, fmt.Errorf("get greets for prod=%d: %w", prodID, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var greet ProdGreet
+		if err := rows.Scan(&greet.GreeteeID, &greet.GreeteeName, &greet.Reference); err != nil {
+			return []ProdGreet{}, fmt.Errorf("scan greet: %w", err)
+		}
+		greets = append(greets, greet)
 	}
 
 	return greets, nil
 }
 
-func (db *Database) GetGroupGreets(groupID any) ([]GroupGreet, error) {
-	var raw_greets []Greet
-	query := db.db.Find(&raw_greets, "greetee_id = ?", groupID)
-
-	if query.Error != nil {
-		return []GroupGreet{}, fmt.Errorf("get greets for greetee_id=%v: %w", groupID, query.Error)
+func (db *Database) GetGroupGreets(groupID uint) ([]GroupGreet, error) {
+	// Get all greets for this group
+	rows, err := db.db.Query(`
+		SELECT gr.id, gr.prod_id, gr.reference
+		FROM greets gr
+		WHERE gr.greetee_id = ?`, groupID)
+	if err != nil {
+		return []GroupGreet{}, fmt.Errorf("get greets for greetee_id=%d: %w", groupID, err)
 	}
+	defer rows.Close()
+	var greets = make([]GroupGreet, 0, 4)
+	for rows.Next() {
+		var prodID, greetID uint
+		var reference string
 
-	var greets []GroupGreet
-
-	for i := range raw_greets {
-		raw_greet := &raw_greets[i]
-		var prod Prod
-		db.db.Find(&prod, "id = ?", raw_greet.ProdID).Association("Groups")
-		db.db.Model(&prod).Association("Groups").Find(&prod.Groups)
-		for j := range prod.Groups {
-			prod.Groups[j].getCounts(db.db)
+		if err := rows.Scan(&greetID, &prodID, &reference); err != nil {
+			continue
 		}
+
+		// Get prod with groups
+		var prod Prod
+		prodRow := db.db.QueryRow(`
+			SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot
+			FROM prods p WHERE p.id = ?`, prodID)
+
+		if err := prodRow.Scan(&prod.ID, &prod.Name, &prod.Year, &prod.Month, &prod.Video, &prod.Rank, &prod.VoteUp, &prod.VotePig, &prod.VoteDown, &prod.Demozoo, &prod.Screenshot); err != nil {
+			continue
+		}
+
+		// Get prod's groups and count them
+		prod.Groups = make([]Group, 0, 4)
+		prodGroupsRows, err := db.db.Query(`
+			SELECT g.id, g.name, g.disambiguation
+			FROM groups g
+			INNER JOIN group_prods gp ON gp.group_id = g.id
+			WHERE gp.prod_id = ?`, prodID)
+		if err != nil {
+			continue
+		}
+
+		for prodGroupsRows.Next() {
+			var g Group
+			if err := prodGroupsRows.Scan(&g.ID, &g.Name, &g.Disambiguation); err != nil {
+				continue
+			}
+			if err := g.getCounts(db.db); err != nil {
+				log.Printf("getCounts for group %d: %v", g.ID, err)
+			}
+			prod.Groups = append(prod.Groups, g)
+		}
+		prodGroupsRows.Close()
+
 		greets = append(greets, GroupGreet{
 			Prod:      prod,
-			Reference: raw_greet.Reference,
+			Reference: reference,
 		})
 	}
 
@@ -577,57 +832,74 @@ type DatabaseStats struct {
 
 func (db *Database) GetStats() DatabaseStats {
 	var stats DatabaseStats
-	db.db.Model(Greet{}).Count(&stats.TotalGreets)
-	db.db.Model(Prod{}).Count(&stats.TotalProds)
-	db.db.Model(Group{}).Count(&stats.TotalGroups)
-	db.db.Model(Greet{}).Distinct("prod_id").Count(&stats.ProdsWithGreets)
-	db.db.Model(Greet{}).Distinct("greetee_id").Count(&stats.GreetedGroups)
+	db.db.QueryRow("SELECT COUNT(*) FROM greets").Scan(&stats.TotalGreets)
+	db.db.QueryRow("SELECT COUNT(*) FROM prods").Scan(&stats.TotalProds)
+	db.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&stats.TotalGroups)
+	db.db.QueryRow("SELECT COUNT(DISTINCT prod_id) FROM greets").Scan(&stats.ProdsWithGreets)
+	db.db.QueryRow("SELECT COUNT(DISTINCT greetee_id) FROM greets").Scan(&stats.GreetedGroups)
 	return stats
 }
 
 func (db *Database) Greet(prodID uint, groupID uint, note string) (uint, error) {
-	tx := db.db.Begin()
+	tx, err := db.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin transaction: %w", err)
+	}
 	defer tx.Rollback()
 
-	var prod Prod
-	if err := tx.Find(&prod, "id = ?", prodID).Error; err != nil {
-		// TODO status not found if errrecordnotfound
-		return 0, fmt.Errorf("find prod id=%v: %w", prodID, err)
+	// Check prod exists
+	var prodExists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM prods WHERE id = ?)", prodID).Scan(&prodExists)
+	if err != nil {
+		return 0, fmt.Errorf("find prod id=%d: %w", prodID, err)
+	}
+	if !prodExists {
+		return 0, fmt.Errorf("prod not found: id=%d", prodID)
 	}
 
-	greet := Greet{
-		Reference: note,
-		GreeteeID: groupID,
-		ProdID:    prodID,
+	// Check group exists
+	var groupExists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", groupID).Scan(&groupExists)
+	if err != nil {
+		return 0, fmt.Errorf("find group id=%d: %w", groupID, err)
+	}
+	if !groupExists {
+		return 0, fmt.Errorf("group not found: id=%d", groupID)
 	}
 
-	log.Printf("Creating greet: prod_id=%v, group_id=%v, note=%v", prodID, groupID, note)
-	if err := tx.Create(&greet).Error; err != nil {
-		log.Printf("Create greet error: %v", err)
+	log.Printf("Creating greet: prod_id=%d, group_id=%d, note=%s", prodID, groupID, note)
+
+	result, err := tx.Exec(`
+		INSERT INTO greets (reference, greetee_id, prod_id)
+		VALUES (?, ?, ?)`, note, groupID, prodID)
+	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return 0, fmt.Errorf("duplicate greet: prod_id=%v, greetee_id=%v", prodID, groupID)
+			return 0, fmt.Errorf("duplicate greet: prod_id=%d, greetee_id=%d", prodID, groupID)
 		}
 		return 0, fmt.Errorf("create greet: %w", err)
 	}
-	log.Printf("Greet created with ID: %v", greet.ID)
 
-	if err := tx.Commit().Error; err != nil {
-		log.Printf("Commit error: %v", err)
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get last insert id: %w", err)
+	}
+	log.Printf("Greet created with ID: %d", id)
+
+	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("tx commit: %w", err)
 	}
 
-	return greet.ID, nil
+	return uint(id), nil
 }
 
 func (db *Database) DeleteGreet(greetID uint) (bool, error) {
-	query := db.db.Unscoped().Delete(&Greet{}, "id = ?", greetID)
-	if query.Error == gorm.ErrRecordNotFound {
-		return false, nil
-	} else if query.Error != nil {
-		return false, fmt.Errorf("delete greet=%d: %w", greetID, query.Error)
+	result, err := db.db.Exec("DELETE FROM greets WHERE id = ?", greetID)
+	if err != nil {
+		return false, fmt.Errorf("delete greet=%d: %w", greetID, err)
 	}
 
-	if query.RowsAffected == 0 {
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
 		return false, nil
 	}
 
@@ -635,11 +907,34 @@ func (db *Database) DeleteGreet(greetID uint) (bool, error) {
 }
 
 func (db *Database) GetMostGreetedGroups(limit int) ([]map[string]any, error) {
-	var results []map[string]any
-	query := db.db.Model(Greet{}).Select("greets.greetee_id AS group_id, groups.name AS group_name, COUNT(DISTINCT greets.id) AS count").Joins("INNER JOIN groups ON groups.id = greets.greetee_id").Group("greets.greetee_id").Order("count DESC").Limit(limit).Find(&results)
+	var results = make([]map[string]any, 0, limit)
+	rows, err := db.db.Query(`
+		SELECT g.id AS group_id, g.name AS group_name, COUNT(gr.id) AS count
+		FROM groups g
+		INNER JOIN greets gr ON gr.greetee_id = g.id
+		GROUP BY g.id
+		ORDER BY count DESC
+		LIMIT ?`, limit)
 
-	if query.Error != nil {
-		return []map[string]any{}, fmt.Errorf("get most %d greeted groups: %w", limit, query.Error)
+	if err != nil {
+		return []map[string]any{}, fmt.Errorf("get most %d greeted groups: %w", limit, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var result = make(map[string]any)
+		var groupID uint
+		var groupName string
+		var count int64
+
+		if err := rows.Scan(&groupID, &groupName, &count); err != nil {
+			return []map[string]any{}, fmt.Errorf("scan result: %w", err)
+		}
+
+		result["group_id"] = groupID
+		result["group_name"] = groupName
+		result["count"] = count
+		results = append(results, result)
 	}
 
 	return results, nil

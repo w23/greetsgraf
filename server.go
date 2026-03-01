@@ -75,7 +75,7 @@ func (c *Database) findProd(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	prodID := ctx.Value("prod_id")
+	prodID := uint(ctx.Value("prod_id").(int))
 
 	prod, err := c.GetProd(prodID)
 	if err != nil {
@@ -157,7 +157,7 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	prodID := ctx.Value("prod_id")
+	prodID := uint(ctx.Value("prod_id").(int))
 
 	greets, err := c.GetProdGreets(prodID)
 	if err != nil {
@@ -170,7 +170,7 @@ func (c *Database) prodGetGreets(w http.ResponseWriter, r *http.Request) {
 
 func (c *Database) groupGetGreeted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	groupID := ctx.Value("group_id")
+	groupID := uint(ctx.Value("group_id").(int))
 
 	greets, err := c.GetGroupGreets(groupID)
 	if err != nil {
