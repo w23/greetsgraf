@@ -199,6 +199,10 @@ func (c *Database) greetsCreate(w http.ResponseWriter, r *http.Request) {
 			respondErrJson(w, http.StatusBadRequest, err)
 			return
 		}
+		if strings.Contains(err.Error(), "not found") {
+			respondErrJson(w, http.StatusNotFound, err)
+			return
+		}
 		respondErrJson(w, http.StatusInternalServerError, err)
 		return
 	}

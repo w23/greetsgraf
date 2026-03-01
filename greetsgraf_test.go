@@ -512,14 +512,13 @@ func TestGreets(t *testing.T) {
 		assert.Equal(t, expectedStats, stats)
 	})
 
-	/* FIXME these tests are broken for now, need database query fixes
 	t.Run("POST non-existent prod", func(t *testing.T) {
 		createReq := CreateGreetRequest{
 			ProdId:  999999,
 			GroupId: 1,
 			Note:    "Should fail",
 		}
-		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusBadRequest)
+		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusNotFound)
 	})
 
 	t.Run("POST non-existent group", func(t *testing.T) {
@@ -528,9 +527,8 @@ func TestGreets(t *testing.T) {
 			GroupId: 999999,
 			Note:    "Should fail",
 		}
-		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusBadRequest)
+		_ = makeRequestWithBody[struct{ Error string }](t, server.URL+"/v1/greets", http.MethodPost, createReq, http.StatusNotFound)
 	})
-	*/
 
 	t.Run("POSTDuplicateGreet", func(t *testing.T) {
 		createReq := CreateGreetRequest{
@@ -595,12 +593,10 @@ func TestGreets(t *testing.T) {
 		assert.Equal(t, expectedStats, stats)
 	})
 
-	/* FIXME this test is broken, need db fixes
 	t.Run("DELETE non-existent greet", func(t *testing.T) {
 		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, server.URL+"/v1/greets/999999", http.StatusNotFound)
 		assert.Equal(t, DeleteGreetResponse{}, deleteResp)
 	})
-	*/
 
 	t.Run("DELETEInvalidIDFormat", func(t *testing.T) {
 		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, server.URL+"/v1/greets/abc", http.StatusBadRequest)
