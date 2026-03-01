@@ -71,7 +71,7 @@ func DatabaseOpen(datafile string) (Database, error) {
 		return Database{}, fmt.Errorf("open database file %s: %w", datafile, err)
 	}
 
-	return Database{db: db}, err
+	return Database{db: db}, nil
 }
 
 func (db *Database) createTables() error {
@@ -131,20 +131,22 @@ func (db *Database) createTables() error {
 	return err
 }
 
-func (db *Database) BuildIndex() {
+func (db *Database) BuildIndex() error {
 	if _, err := db.db.Exec("CREATE VIRTUAL TABLE groups_fts USING fts5(name, id)"); err != nil {
-		log.Fatalf("Failed to create FTS index for groups: %+v", err)
+		return fmt.Errorf("create FTS index for groups: %w", err)
 	}
 	if _, err := db.db.Exec("INSERT INTO groups_fts (name, id) SELECT name, id FROM groups"); err != nil {
-		log.Fatalf("Failed to populate FTS index for groups: %+v", err)
+		return fmt.Errorf("populate FTS index for groups: %w", err)
 	}
 
 	if _, err := db.db.Exec("CREATE VIRTUAL TABLE prods_fts USING fts5(name, id)"); err != nil {
-		log.Fatalf("Failed to create FTS index for prods: %+v", err)
+		return fmt.Errorf("create FTS index for prods: %w", err)
 	}
 	if _, err := db.db.Exec("INSERT INTO prods_fts (name, id) SELECT name, id FROM prods"); err != nil {
-		log.Fatalf("Failed to populate FTS index for prods: %+v", err)
+		return fmt.Errorf("populate FTS index for prods: %w", err)
 	}
+
+	return nil
 }
 
 func readJsonGz(filename string) (map[string]any, error) {
@@ -153,12 +155,14 @@ func readJsonGz(filename string) (map[string]any, error) {
 		log.Printf("Error opening file %s: %v", filename, err)
 		return nil, err
 	}
+	defer file.Close()
 
 	gz, err := gzip.NewReader(file)
 	if err != nil {
 		log.Printf("Error unpacking file %s: %v", filename, err)
 		return nil, err
 	}
+	defer gz.Close()
 
 	var value map[string]any
 	err = json.NewDecoder(gz).Decode(&value)
@@ -240,25 +244,23 @@ func (db *Database) importProds(prodsfile string) error {
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
+	defer tx.Rollback()
 
 	prodStmt, err := tx.Prepare(`INSERT INTO prods (id, name, year, month, video, rank, voteup, votepig, votedown, demozoo, screenshot)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("prepare prod insert: %w", err)
 	}
 	defer prodStmt.Close()
 
 	groupStmt, err := tx.Prepare(`INSERT INTO groups (id, name, disambiguation) VALUES (?, ?, ?)`)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("prepare group insert: %w", err)
 	}
 	defer groupStmt.Close()
 
 	assocStmt, err := tx.Prepare(`INSERT OR IGNORE INTO group_prods (group_id, prod_id) VALUES (?, ?)`)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("prepare assoc insert: %w", err)
 	}
 	defer assocStmt.Close()
@@ -353,7 +355,6 @@ func (db *Database) importProds(prodsfile string) error {
 
 		_, err = prodStmt.Exec(pid, name, year, month, video, rank, voteUp, votePig, voteDown, demozoo, screenshot)
 		if err != nil {
-			tx.Rollback()
 			return fmt.Errorf("create prod %d:%s: %w", pid, name, err)
 		}
 
@@ -384,7 +385,6 @@ func (db *Database) importProds(prodsfile string) error {
 				disambiguation, _ := group["disambiguation"].(string)
 				_, err = groupStmt.Exec(uint(gid), gname, disambiguation)
 				if err != nil {
-					tx.Rollback()
 					return fmt.Errorf("create group %d:%s: %w", gid, gname, err)
 				}
 				createdGroups[uint(gid)] = true
@@ -394,7 +394,6 @@ func (db *Database) importProds(prodsfile string) error {
 			// Associate with prod
 			_, err = assocStmt.Exec(uint(gid), pid)
 			if err != nil {
-				tx.Rollback()
 				return fmt.Errorf("associate group %d with prod %d: %w", gid, pid, err)
 			}
 		}
@@ -437,14 +436,12 @@ func (db *Database) importGroups(groupsfile string) error {
 
 	updateStmt, err := tx.Prepare(`UPDATE groups SET name = ?, disambiguation = ? WHERE id = ?`)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("prepare group update: %w", err)
 	}
 	defer updateStmt.Close()
 
 	insertStmt, err := tx.Prepare(`INSERT INTO groups (id, name, disambiguation) VALUES (?, ?, ?)`)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("prepare group insert: %w", err)
 	}
 	defer insertStmt.Close()
@@ -481,7 +478,6 @@ func (db *Database) importGroups(groupsfile string) error {
 			// Create new group
 			_, err = insertStmt.Exec(uint(gid), name, disambiguation)
 			if err != nil {
-				tx.Rollback()
 				return fmt.Errorf("create group %d:%s: %w", gid, name, err)
 			}
 			createdCount++
@@ -489,7 +485,6 @@ func (db *Database) importGroups(groupsfile string) error {
 			// Update existing group
 			result, err := updateStmt.Exec(name, disambiguation, uint(gid))
 			if err != nil {
-				tx.Rollback()
 				return fmt.Errorf("update group %d:%s: %w", gid, name, err)
 			}
 			rows, _ := result.RowsAffected()

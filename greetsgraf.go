@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 )
 
@@ -49,9 +50,13 @@ func SetupDatabase(args SetupArgs) (Database, error) {
 		if err := db.ImportPouet(args.PouetProds, args.PouetGroups); err != nil {
 			return Database{}, err
 		}
-		db.BuildIndex()
+		if err := db.BuildIndex(); err != nil {
+			return Database{}, fmt.Errorf("build index: %w", err)
+		}
 	} else if args.BuildIndex {
-		db.BuildIndex()
+		if err := db.BuildIndex(); err != nil {
+			return Database{}, fmt.Errorf("build index: %w", err)
+		}
 	}
 
 	return db, nil
