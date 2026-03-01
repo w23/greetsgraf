@@ -76,6 +76,7 @@ func main() {
 		flag.Usage()
 		log.Fatalf("Cannot setup database %s: %v", args.db, err)
 	}
+	defer db.Close()
 
 	if args.serve {
 		listen(db, args.listen, args.static)

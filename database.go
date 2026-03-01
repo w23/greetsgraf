@@ -19,8 +19,8 @@ type Group struct {
 	ID             uint
 	Name           string
 	Disambiguation string
-	ProdsCount     int64 `gorm:"-"`
-	GreetsCount    int64 `gorm:"-"`
+	ProdsCount     int64
+	GreetsCount    int64
 }
 
 type Prod struct {
@@ -35,8 +35,8 @@ type Prod struct {
 	VoteDown   int
 	Demozoo    int
 	Screenshot string
-	Groups     []Group `gorm:"-"`
-	Greets     []Greet `gorm:"-"`
+	Groups     []Group
+	Greets     []Greet
 }
 
 type Greet struct {
@@ -152,26 +152,23 @@ func (db *Database) BuildIndex() error {
 func readJsonGz(filename string) (map[string]any, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Printf("Error opening file %s: %v", filename, err)
-		return nil, err
+		return nil, fmt.Errorf("open file %s: %w", filename, err)
 	}
 	defer file.Close()
 
 	gz, err := gzip.NewReader(file)
 	if err != nil {
-		log.Printf("Error unpacking file %s: %v", filename, err)
-		return nil, err
+		return nil, fmt.Errorf("unpack file %s: %w", filename, err)
 	}
 	defer gz.Close()
 
 	var value map[string]any
 	err = json.NewDecoder(gz).Decode(&value)
 	if err != nil {
-		log.Printf("Error decoding json from file %s: %v", filename, err)
-		return nil, err
+		return nil, fmt.Errorf("decode json from file %s: %w", filename, err)
 	}
 
-	return value, err
+	return value, nil
 }
 
 // parsePouetDate returns optional year and month of the prod
@@ -714,7 +711,7 @@ func (db *Database) GetProd(pid uint) (Prod, error) {
 
 type ProdWithGreetGroups struct {
 	Prod
-	GreetGroups []Group `gorm:"-"`
+	GreetGroups []Group
 }
 
 // Keep for API compatibility - returns same structure as before
@@ -741,14 +738,14 @@ func (db *Database) GetProdGreets(prodID uint) ([]ProdGreet, error) {
 		WHERE gr.prod_id = ?`, prodID)
 
 	if err != nil {
-		return []ProdGreet{}, fmt.Errorf("get greets for prod=%d: %w", prodID, err)
+		return nil, fmt.Errorf("get greets for prod=%d: %w", prodID, err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var greet ProdGreet
 		if err := rows.Scan(&greet.GreeteeID, &greet.GreeteeName, &greet.Reference); err != nil {
-			return []ProdGreet{}, fmt.Errorf("scan greet: %w", err)
+			return nil, fmt.Errorf("scan greet: %w", err)
 		}
 		greets = append(greets, greet)
 	}
@@ -763,7 +760,7 @@ func (db *Database) GetGroupGreets(groupID uint) ([]GroupGreet, error) {
 		FROM greets gr
 		WHERE gr.greetee_id = ?`, groupID)
 	if err != nil {
-		return []GroupGreet{}, fmt.Errorf("get greets for greetee_id=%d: %w", groupID, err)
+		return nil, fmt.Errorf("get greets for greetee_id=%d: %w", groupID, err)
 	}
 	defer rows.Close()
 	var greets = make([]GroupGreet, 0, 4)
@@ -772,6 +769,7 @@ func (db *Database) GetGroupGreets(groupID uint) ([]GroupGreet, error) {
 		var reference string
 
 		if err := rows.Scan(&greetID, &prodID, &reference); err != nil {
+			log.Printf("GetGroupGreets: scan greet error: %v", err)
 			continue
 		}
 
@@ -782,6 +780,7 @@ func (db *Database) GetGroupGreets(groupID uint) ([]GroupGreet, error) {
 			FROM prods p WHERE p.id = ?`, prodID)
 
 		if err := prodRow.Scan(&prod.ID, &prod.Name, &prod.Year, &prod.Month, &prod.Video, &prod.Rank, &prod.VoteUp, &prod.VotePig, &prod.VoteDown, &prod.Demozoo, &prod.Screenshot); err != nil {
+			log.Printf("GetGroupGreets: scan prod error: %v", err)
 			continue
 		}
 
@@ -793,12 +792,14 @@ func (db *Database) GetGroupGreets(groupID uint) ([]GroupGreet, error) {
 			INNER JOIN group_prods gp ON gp.group_id = g.id
 			WHERE gp.prod_id = ?`, prodID)
 		if err != nil {
+			log.Printf("GetGroupGreets: query prod groups error: %v", err)
 			continue
 		}
 
 		for prodGroupsRows.Next() {
 			var g Group
 			if err := prodGroupsRows.Scan(&g.ID, &g.Name, &g.Disambiguation); err != nil {
+				log.Printf("GetGroupGreets: scan prod group error: %v", err)
 				continue
 			}
 			if err := g.getCounts(db.db); err != nil {
@@ -827,11 +828,21 @@ type DatabaseStats struct {
 
 func (db *Database) GetStats() DatabaseStats {
 	var stats DatabaseStats
-	db.db.QueryRow("SELECT COUNT(*) FROM greets").Scan(&stats.TotalGreets)
-	db.db.QueryRow("SELECT COUNT(*) FROM prods").Scan(&stats.TotalProds)
-	db.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&stats.TotalGroups)
-	db.db.QueryRow("SELECT COUNT(DISTINCT prod_id) FROM greets").Scan(&stats.ProdsWithGreets)
-	db.db.QueryRow("SELECT COUNT(DISTINCT greetee_id) FROM greets").Scan(&stats.GreetedGroups)
+	if err := db.db.QueryRow("SELECT COUNT(*) FROM greets").Scan(&stats.TotalGreets); err != nil {
+		log.Printf("count greets: %v", err)
+	}
+	if err := db.db.QueryRow("SELECT COUNT(*) FROM prods").Scan(&stats.TotalProds); err != nil {
+		log.Printf("count prods: %v", err)
+	}
+	if err := db.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&stats.TotalGroups); err != nil {
+		log.Printf("count groups: %v", err)
+	}
+	if err := db.db.QueryRow("SELECT COUNT(DISTINCT prod_id) FROM greets").Scan(&stats.ProdsWithGreets); err != nil {
+		log.Printf("count prods with greets: %v", err)
+	}
+	if err := db.db.QueryRow("SELECT COUNT(DISTINCT greetee_id) FROM greets").Scan(&stats.GreetedGroups); err != nil {
+		log.Printf("count greeted groups: %v", err)
+	}
 	return stats
 }
 
@@ -860,6 +871,10 @@ func (db *Database) Greet(prodID uint, groupID uint, note string) (uint, error) 
 	}
 	if !groupExists {
 		return 0, fmt.Errorf("group not found: id=%d", groupID)
+	}
+
+	if len(note) > 500 {
+		return 0, fmt.Errorf("note too long: max 500 characters, got %d", len(note))
 	}
 
 	log.Printf("Creating greet: prod_id=%d, group_id=%d, note=%s", prodID, groupID, note)
@@ -893,7 +908,10 @@ func (db *Database) DeleteGreet(greetID uint) (bool, error) {
 		return false, fmt.Errorf("delete greet=%d: %w", greetID, err)
 	}
 
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("get rows affected for greet=%d: %w", greetID, err)
+	}
 	if rows == 0 {
 		return false, nil
 	}
@@ -901,7 +919,20 @@ func (db *Database) DeleteGreet(greetID uint) (bool, error) {
 	return true, nil
 }
 
+func (db *Database) Close() error {
+	if db.db != nil {
+		return db.db.Close()
+	}
+	return nil
+}
+
 func (db *Database) GetMostGreetedGroups(limit int) ([]map[string]any, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
 	var results = make([]map[string]any, 0, limit)
 	rows, err := db.db.Query(`
 		SELECT g.id AS group_id, g.name AS group_name, COUNT(gr.id) AS count
@@ -912,7 +943,7 @@ func (db *Database) GetMostGreetedGroups(limit int) ([]map[string]any, error) {
 		LIMIT ?`, limit)
 
 	if err != nil {
-		return []map[string]any{}, fmt.Errorf("get most %d greeted groups: %w", limit, err)
+		return nil, fmt.Errorf("get most %d greeted groups: %w", limit, err)
 	}
 	defer rows.Close()
 

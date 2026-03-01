@@ -94,16 +94,4 @@ func TestPouetImport(t *testing.T) {
 		assert.Equal(t, 1993, prod.Year)
 		assert.Equal(t, 0, prod.Month)
 	})
-
-	// TODO:
-	// - fuzzy prod search
-	// - fuzzy group search
 }
-
-// TODO greetings test:
-// - add
-// - list greets for prod
-// - list greets of a group
-// - remove
-// - rank
-// - stats
