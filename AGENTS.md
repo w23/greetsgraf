@@ -151,3 +151,51 @@ The application uses two separate SQLite databases:
 - Use `json.NewDecoder(r.Body).Decode(&target)` for request bodies
 - Use `json.Marshal(payload)` for response payloads
 - Handle decode errors with appropriate HTTP status codes
+
+## Frontend Architecture
+
+### File Structure (`./static/` directory)
+- `index.html` - Main page with stats and group search
+- `edit.html` - Edit page for adding/finding greets
+- `style.css` - All styling (minimalistic, vanilla CSS)
+- `utils.js` - Core utilities: `Tag()`, `Text()`, `sendRequest()`, `Autocomplete` class
+- `common.js` - Shared autocomplete for groups
+- `index.js` - Main page logic (stats, most greeted groups)
+- `edit.js` - Edit page logic (prod search, greet management)
+
+### Backend Communication
+The frontend communicates with the backend via `XMLHttpRequest` (no fetch/AJAX libraries used):
+- `sendRequest(method, path, query, body, successCb, errorCb)` - Main HTTP helper
+- All API calls use JSON responses with `Content-Type: application/json`
+
+### API Endpoints
+- `GET /v1/stats` - Returns stats (ProdsWithGreets, TotalProds, etc.)
+- `GET /v1/groups/search?name=xxx` - Search groups
+- `GET /v1/groups/greeted?limit=N` - Get most greeted groups
+- `GET /v1/groups/{id}/greets` - Get greets for a group
+- `GET /v1/prods/search?name=xxx` - Search productions
+- `GET /v1/prods/{id}` - Get prod details with greets
+- `POST /v1/greets/` - Create a greet (body: `{ProdId, GroupId, Note}`)
+- `DELETE /v1/greets/{id}` - Delete a greet
+
+### Key Frontend Patterns
+- **Vanilla JS only** - No frameworks, no build step
+- **Tag function** - `Tag(name, attrs, body, children)` creates DOM elements
+- **Autocomplete** - Custom class in `utils.js` with keyboard navigation
+- **Debounce** - 200ms debounce on autocomplete searches
+- **Inline styles** - Many styles inline (e.g., `style="width: 100%"`)
+
+### CSS Architecture
+- Single `style.css` file
+- Uses CSS variables (currently minimal)
+- Flexbox layout for main wrapper
+- Custom autocomplete dropdown styling
+- Simple table styling for data display
+
+### Adding New Features
+1. Add HTML elements in respective `.html` file
+2. Add CSS styles to `style.css`
+3. Add logic to appropriate `.js` file
+4. Use `Tag()` helper for dynamic DOM creation
+5. Use `sendRequest()` for API calls
+6. Use `autocompleteGroup()` or `Autocomplete` for search inputs
