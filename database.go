@@ -168,39 +168,26 @@ func (db *Database) GetGroupGreets(groupID uint) ([]GroupGreet, error) {
 			continue
 		}
 
-		var prod Prod
-		prodRow := db.pouetDB.db.QueryRow(`
-			SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot
-			FROM prods p WHERE p.id = ?`, prodID)
-
-		if err := prodRow.Scan(&prod.ID, &prod.Name, &prod.Year, &prod.Month, &prod.Video, &prod.Rank, &prod.VoteUp, &prod.VotePig, &prod.VoteDown, &prod.Demozoo, &prod.Screenshot); err != nil {
-			log.Printf("GetGroupGreets: scan prod error: %v", err)
-			continue
-		}
-
-		prod.Groups = make([]Group, 0, 4)
-		prodGroupsRows, err := db.pouetDB.db.Query(`
-			SELECT g.id, g.name, g.disambiguation
-			FROM groups g
-			INNER JOIN group_prods gp ON gp.group_id = g.id
-			WHERE gp.prod_id = ?`, prodID)
+		prod, err := db.pouetDB.GetProd(prodID)
 		if err != nil {
-			log.Printf("GetGroupGreets: query prod groups error: %v", err)
+			log.Printf("GetGroupGreets: get prod %d: %v", prodID, err)
 			continue
 		}
 
-		for prodGroupsRows.Next() {
-			var g Group
-			if err := prodGroupsRows.Scan(&g.ID, &g.Name, &g.Disambiguation); err != nil {
-				log.Printf("GetGroupGreets: scan prod group error: %v", err)
-				continue
+		for i := range prod.Groups {
+			g := &prod.Groups[i]
+			var count int64
+			if err := db.pouetDB.db.QueryRow("SELECT COUNT(*) FROM prods p INNER JOIN group_prods gp ON gp.prod_id = p.id WHERE gp.group_id = ?", g.ID).Scan(&count); err != nil {
+				log.Printf("GetGroupGreets: count prods for group %d: %v", g.ID, err)
+			} else {
+				g.ProdsCount = count
 			}
-			if err := g.getCounts(db); err != nil {
-				log.Printf("getCounts for group %d: %v", g.ID, err)
+			if err := db.db.QueryRow("SELECT COUNT(*) FROM greets WHERE greetee_id = ?", g.ID).Scan(&count); err != nil {
+				log.Printf("GetGroupGreets: count greets for group %d: %v", g.ID, err)
+			} else {
+				g.GreetsCount = count
 			}
-			prod.Groups = append(prod.Groups, g)
 		}
-		prodGroupsRows.Close()
 
 		greets = append(greets, GroupGreet{
 			Prod:      prod,
@@ -218,19 +205,17 @@ func (db *Database) Greet(prodID uint, groupID uint, note string) (uint, error) 
 	}
 	defer tx.Rollback()
 
-	var prodExists bool
-	err = db.pouetDB.db.QueryRow("SELECT EXISTS(SELECT 1 FROM prods WHERE id = ?)", prodID).Scan(&prodExists)
+	prodExists, err := db.pouetDB.ProdExists(prodID)
 	if err != nil {
-		return 0, fmt.Errorf("find prod id=%d: %w", prodID, err)
+		return 0, err
 	}
 	if !prodExists {
 		return 0, fmt.Errorf("prod not found: id=%d", prodID)
 	}
 
-	var groupExists bool
-	err = db.pouetDB.db.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", groupID).Scan(&groupExists)
+	groupExists, err := db.pouetDB.GroupExists(groupID)
 	if err != nil {
-		return 0, fmt.Errorf("find group id=%d: %w", groupID, err)
+		return 0, err
 	}
 	if !groupExists {
 		return 0, fmt.Errorf("group not found: id=%d", groupID)
@@ -295,11 +280,15 @@ func (db *Database) GetStats() DatabaseStats {
 	if err := db.db.QueryRow("SELECT COUNT(*) FROM greets").Scan(&stats.TotalGreets); err != nil {
 		log.Printf("count greets: %v", err)
 	}
-	if err := db.pouetDB.db.QueryRow("SELECT COUNT(*) FROM prods").Scan(&stats.TotalProds); err != nil {
+	if count, err := db.pouetDB.CountProds(); err != nil {
 		log.Printf("count prods: %v", err)
+	} else {
+		stats.TotalProds = count
 	}
-	if err := db.pouetDB.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&stats.TotalGroups); err != nil {
+	if count, err := db.pouetDB.CountGroups(); err != nil {
 		log.Printf("count groups: %v", err)
+	} else {
+		stats.TotalGroups = count
 	}
 	if err := db.db.QueryRow("SELECT COUNT(DISTINCT prod_id) FROM greets").Scan(&stats.ProdsWithGreets); err != nil {
 		log.Printf("count prods with greets: %v", err)

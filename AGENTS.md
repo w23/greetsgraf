@@ -121,8 +121,13 @@ import (
 ## Go Specific Notes
 
 ### File Organization
-- Multi-file application: `greetsgraf.go` (main), `database.go` (models & DB operations), `server.go` (HTTP handlers)
+- Multi-file application: `greetsgraf.go` (main), `database.go` (models & DB operations), `server.go` (HTTP handlers), `pouet.go` (Pouet data storage)
 - All code in `package main`
+
+### Dual-Database Architecture
+The application uses two separate SQLite databases:
+1. **User Data Database** (`greets.db`): Stores greets, user data
+2. **Pouet Database** (`pouet.db`): Stores static Pouet group and prod data with FTS5 indexes
 
 ### Pre-commit Checklist
 - Run `go vet ./...` for static analysis

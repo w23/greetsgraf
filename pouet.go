@@ -586,21 +586,6 @@ func (db *PouetDatabase) FindProds(name string) ([]Prod, error) {
 	return prods, nil
 }
 
-func (g *Group) getCounts(db *Database) error {
-	var count int64
-	if err := db.pouetDB.db.QueryRow("SELECT COUNT(*) FROM prods p INNER JOIN group_prods gp ON gp.prod_id = p.id WHERE gp.group_id = ?", g.ID).Scan(&count); err != nil {
-		return fmt.Errorf("count prods for group %d: %w", g.ID, err)
-	}
-	g.ProdsCount = count
-
-	if err := db.db.QueryRow("SELECT COUNT(*) FROM greets WHERE greetee_id = ?", g.ID).Scan(&count); err != nil {
-		return fmt.Errorf("count greets for group %d: %w", g.ID, err)
-	}
-	g.GreetsCount = count
-
-	return nil
-}
-
 func (db *PouetDatabase) GetProd(pid uint) (Prod, error) {
 	var prod Prod
 	row := db.db.QueryRow(`
@@ -647,6 +632,64 @@ func (db *PouetDatabase) GetGroup(groupID uint) (Group, error) {
 	}
 
 	return group, nil
+}
+
+func (db *PouetDatabase) ProdExists(id uint) (bool, error) {
+	var exists bool
+	err := db.db.QueryRow("SELECT EXISTS(SELECT 1 FROM prods WHERE id = ?)", id).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check prod %d: %w", id, err)
+	}
+	return exists, nil
+}
+
+func (db *PouetDatabase) GroupExists(id uint) (bool, error) {
+	var exists bool
+	err := db.db.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", id).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check group %d: %w", id, err)
+	}
+	return exists, nil
+}
+
+func (db *PouetDatabase) CountProds() (int64, error) {
+	var count int64
+	err := db.db.QueryRow("SELECT COUNT(*) FROM prods").Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count prods: %w", err)
+	}
+	return count, nil
+}
+
+func (db *PouetDatabase) CountGroups() (int64, error) {
+	var count int64
+	err := db.db.QueryRow("SELECT COUNT(*) FROM groups").Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count groups: %w", err)
+	}
+	return count, nil
+}
+
+func (db *PouetDatabase) GetGroupsByProdID(prodID uint) ([]Group, error) {
+	rows, err := db.db.Query(`
+		SELECT g.id, g.name, g.disambiguation
+		FROM groups g
+		INNER JOIN group_prods gp ON gp.group_id = g.id
+		WHERE gp.prod_id = ?`, prodID)
+	if err != nil {
+		return nil, fmt.Errorf("get groups for prod %d: %w", prodID, err)
+	}
+	defer rows.Close()
+
+	var groups []Group
+	for rows.Next() {
+		var g Group
+		if err := rows.Scan(&g.ID, &g.Name, &g.Disambiguation); err != nil {
+			return nil, fmt.Errorf("scan group: %w", err)
+		}
+		groups = append(groups, g)
+	}
+	return groups, nil
 }
 
 func (db *PouetDatabase) Close() error {
