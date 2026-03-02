@@ -5,8 +5,8 @@
 	--text-primary: #e0e0e0;
 	--text-secondary: #a0a0a0;
 	--text-muted: #707070;
-	--accent: #4a9eff;
-	--accent-hover: #3a8eef;
+	--accent: #4a8fc7;
+	--accent-hover: #3a7fb7;
 	--border: #3d3d3d;
 	--success: #4caf50;
 	--danger: #e57373;
@@ -240,6 +240,15 @@ td a:hover {
 
 #prod_container {
 	margin-top: 16px;
+}
+
+#prod a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+#prod a:hover {
+	text-decoration: underline;
 }
 
 #prod {

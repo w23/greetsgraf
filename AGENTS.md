@@ -184,6 +184,7 @@ The frontend communicates with the backend via `XMLHttpRequest` (no fetch/AJAX l
 - **Autocomplete** - Custom class in `utils.js` with keyboard navigation
 - **Debounce** - 200ms debounce on autocomplete searches
 - **Inline styles** - Many styles inline (e.g., `style="width: 100%"`)
+- **Tone** - Keep humorous, self-deprecating tone in UI text (e.g., footer credits)
 
 ### CSS Architecture
 - Single `style.css` file
