@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<title>Greets Graf</title>
@@ -11,19 +11,20 @@
 	</head>
 	<body>
 		<div id="main-wrapper">
-			<div id="main-content">
+			<main id="main-content">
 				<h1>An attempt to collect all demoscene greetings</h1>
 				<div id="stats"><h3>Current stats</h3></div>
-				<div><h2><a href="edit.html">PLEASE ADD MORE GREETINGS HERE</a></h2></div>
+				<div><h2><a href="edit.html">Add more greetings</a></h2></div>
 				<div id="most-greeted-groups"><h3>Most greeted groups so far</h3></div>
-				<div><h3>Examine greets to groups</h3>
+				<section>
+					<h3>Examine greets to groups</h3>
 					<label for="group-search">Find greets to a group:</label>
-					<span class="autocomplete" style="width: 256px;">
-						<input type="text" value="" style="width: 100%;" id="group-search" placeholder="Group name">
+					<span class="autocomplete">
+						<input type="text" id="group-search" placeholder="Group name">
 					</span>
 					<div id="group-greets-table"></div>
-				</div>
-			</div>
+				</section>
+			</main>
 			<footer>
 				Haphazardly coded by <a href="https://www.pouet.net/user.php?who=24180">provod</a>/<a href="https://www.pouet.net/groups.php?which=13728">jetlag</a> <small>(I clearly have no idea what I'm doing)</small><br>
 				Sources: <a href="https://github.com/w23/greetsgraf">github.com/w23/greetsgraf</a>.

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<title>Edit Greets Graf</title>
@@ -12,31 +12,35 @@
 
 	<body>
 		<div id="main-wrapper">
-			<div id="main-content">
-				<h1>Let's fill some greetings</h1>
+			<main id="main-content">
+				<h1>Add greetings</h1>
 
 				<label for="in_prod">Demofinder 2000:</label>
-				<div id="prod_search" class="autocomplete" style="width: 320px;">
-					<input type="text" id="in_prod" style="width: 100%;" placehoder="Prod name here...">
+				<div id="prod_search" class="autocomplete">
+					<input type="text" id="in_prod" placeholder="Prod name...">
 				</div>
-				<span style="color: #777;">(or <label>Pouet prod id: <input type="text" style="width: 6em;" id="in_prod_id"></label> <button onclick="loadProd()">Load</button>)</span>
-
-				<br>
+				<div style="margin-top: 8px; color: var(--text-muted);">
+					or enter Pouet prod id:
+					<input type="text" id="in_prod_id" style="width: 80px;">
+					<button onclick="loadProd()">Load</button>
+				</div>
 
 				<div id="prod_container" style="display: none;">
 					<div id="prod"></div>
 
-					<strong>Greetings:</strong><br>
+					<h3>Greetings:</h3>
 					<div id="greets_list"></div>
 
-					<label for="greet_add_group">Add new greeting to group:</label>
-					<span class="autocomplete" style="width: 256px;">
-						<input type="text" value="" style="width: 100%;" id="greet_add_group" placeholder="Group name">
+					<h3>Add new greeting</h3>
+					<label for="greet_add_group">To group:</label>
+					<span class="autocomplete">
+						<input type="text" id="greet_add_group" placeholder="Group name">
 					</span>
-					<label>Note: <input type="text" value="" placeholder="e.g. 13:37 or nfo" id="greet_add_note"></label>
-					<button id="greet_add_button" disabled>add</button>
+					<label style="margin-left: 16px;">Note:</label>
+					<input type="text" id="greet_add_note" placeholder="e.g. 13:37 or nfo" style="margin-left: 8px;">
+					<button id="greet_add_button" disabled>Add</button>
 				</div>
-			</div>
+			</main>
 			<footer>
 				Haphazardly coded by <a href="https://www.pouet.net/user.php?who=24180">provod</a>/<a href="https://www.pouet.net/groups.php?which=13728">jetlag</a> <small>(I clearly have no idea what I'm doing)</small><br>
 				Sources: <a href="https://github.com/w23/greetsgraf">github.com/w23/greetsgraf</a>.

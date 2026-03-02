@@ -1,0 +1,36 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Vet code
+        run: go vet ./...
+
+      - name: Format check
+        run: test -z "$(go fmt ./...)"
+
+      - name: Build application
+        run: |
+          CGO_CFLAGS="-D_LARGEFILE64_SOURCE" go build -ldflags="-extldflags=-static" -tags "sqlite_omit_load_extension sqlite_fts5" -o greetsgraf
+
+      - name: Run tests
+        run: |
+          CGO_CFLAGS="-D_LARGEFILE64_SOURCE" CGO_ENABLED=1 go test -tags "sqlite_omit_load_extension sqlite_fts5" ./...
