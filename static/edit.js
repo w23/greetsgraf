@@ -201,11 +201,24 @@ window.onload = function() {
 
 					let suggestions = [];
 
+					if (!json || json.length === 0) {
+						found([]);
+						return;
+					}
+
 					json.forEach((obj) => {
+						let groupText = "N/A";
+						if (obj.Groups && obj.Groups.length > 0) {
+							groupText = obj.Groups.map(g => g.Name || g.name).filter(n => n).join(", ");
+						}
+						if (!groupText || groupText === "") {
+							groupText = "N/A";
+						}
 						let element = Tag('div', {class: "item-inactive"}, null, [
 							Text(obj.Name + (obj.Disambiguation ? " (" + obj.Disambiguation + ")" : "")),
 							Text(" by "),
-								(obj.Groups && obj.Groups.length > 0) ? Tag("span", {class: "group"}, obj.Groups[0].Name) : Text("N/A")]);
+								Tag("span", {class: "group"}, groupText)
+						]);
 						suggestions.push({
 							id: obj.ID,
 							name: obj.Name,

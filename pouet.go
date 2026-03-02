@@ -526,12 +526,15 @@ func (db *PouetDatabase) FindProds(name string) ([]Prod, error) {
 
 	prods := make([]Prod, 0, limit)
 
+	prodGroups := make(map[uint][]Group)
+
 	rows, err := db.db.Query(`
 		SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot,
-			   gp.group_id
+			   gp.group_id, g.name, g.disambiguation
 		FROM prods p
 		INNER JOIN prods_fts f ON f.id = p.id
 		INNER JOIN group_prods gp ON gp.prod_id = p.id
+		INNER JOIN groups g ON g.id = gp.group_id
 		WHERE f.match ?
 		ORDER BY f.rank`, name)
 
@@ -541,11 +544,14 @@ func (db *PouetDatabase) FindProds(name string) ([]Prod, error) {
 		for rows.Next() {
 			var p Prod
 			var groupID uint
-			if err := rows.Scan(&p.ID, &p.Name, &p.Year, &p.Month, &p.Video, &p.Rank, &p.VoteUp, &p.VotePig, &p.VoteDown, &p.Demozoo, &p.Screenshot, &groupID); err != nil {
+			var groupName, groupDisambiguation string
+			if err := rows.Scan(&p.ID, &p.Name, &p.Year, &p.Month, &p.Video, &p.Rank, &p.VoteUp, &p.VotePig, &p.VoteDown, &p.Demozoo, &p.Screenshot, &groupID, &groupName, &groupDisambiguation); err != nil {
 				return nil, fmt.Errorf("scan prod: %w", err)
 			}
-			p.Groups = append(p.Groups, Group{ID: groupID})
-			prods = append(prods, p)
+			if _, exists := prodGroups[p.ID]; !exists {
+				prods = append(prods, p)
+			}
+			prodGroups[p.ID] = append(prodGroups[p.ID], Group{ID: groupID, Name: groupName, Disambiguation: groupDisambiguation})
 		}
 		ftsSuccess = true
 	}
@@ -553,9 +559,10 @@ func (db *PouetDatabase) FindProds(name string) ([]Prod, error) {
 	if !ftsSuccess || len(prods) == 0 {
 		rows2, err := db.db.Query(`
 			SELECT p.id, p.name, p.year, p.month, p.video, p.rank, p.voteup, p.votepig, p.votedown, p.demozoo, p.screenshot,
-				   gp.group_id
+				   gp.group_id, g.name, g.disambiguation
 			FROM prods p
 			INNER JOIN group_prods gp ON gp.prod_id = p.id
+			INNER JOIN groups g ON g.id = gp.group_id
 			WHERE p.name LIKE ?
 			ORDER BY p.id
 			LIMIT ?`, "%"+name+"%", limit)
@@ -566,21 +573,19 @@ func (db *PouetDatabase) FindProds(name string) ([]Prod, error) {
 		for rows2.Next() {
 			var p Prod
 			var groupID uint
-			if err := rows2.Scan(&p.ID, &p.Name, &p.Year, &p.Month, &p.Video, &p.Rank, &p.VoteUp, &p.VotePig, &p.VoteDown, &p.Demozoo, &p.Screenshot, &groupID); err != nil {
+			var groupName, groupDisambiguation string
+			if err := rows2.Scan(&p.ID, &p.Name, &p.Year, &p.Month, &p.Video, &p.Rank, &p.VoteUp, &p.VotePig, &p.VoteDown, &p.Demozoo, &p.Screenshot, &groupID, &groupName, &groupDisambiguation); err != nil {
 				continue
 			}
-			found := false
-			for _, existing := range prods {
-				if existing.ID == p.ID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				p.Groups = append(p.Groups, Group{ID: groupID})
+			if _, exists := prodGroups[p.ID]; !exists {
 				prods = append(prods, p)
 			}
+			prodGroups[p.ID] = append(prodGroups[p.ID], Group{ID: groupID, Name: groupName, Disambiguation: groupDisambiguation})
 		}
+	}
+
+	for i := range prods {
+		prods[i].Groups = prodGroups[prods[i].ID]
 	}
 
 	return prods, nil

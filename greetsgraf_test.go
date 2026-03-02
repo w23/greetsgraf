@@ -50,6 +50,22 @@ type GroupSearchResponse struct {
 	GreetsCount    int64  `json:"greetsCount"`
 }
 
+type ProdSearchResponse struct {
+	ID         uint            `json:"id"`
+	Name       string          `json:"name"`
+	Year       int             `json:"year"`
+	Month      int             `json:"month"`
+	Day        int             `json:"day"`
+	Video      string          `json:"video"`
+	Rank       int             `json:"rank"`
+	VoteUp     int             `json:"voteUp"`
+	VotePig    int             `json:"votePig"`
+	VoteDown   int             `json:"voteDown"`
+	Demozoo    int             `json:"demozoo"`
+	Screenshot string          `json:"screenshot"`
+	Groups     []ResponseGroup `json:"groups"`
+}
+
 type ProdGetResponse struct {
 	ID         uint            `json:"id"`
 	Name       string          `json:"name"`
@@ -434,6 +450,146 @@ func TestPouetData(t *testing.T) {
 				GreetsCount:    0,
 			},
 		})
+	})
+
+	t.Run("ProdSearchExactMatch", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=Astral%20Blur", http.StatusOK)
+		t.Logf("Prod search response for 'Astral Blur': %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{
+			{
+				ID:         uint(1),
+				Name:       "Astral Blur",
+				Year:       1997,
+				Month:      3,
+				Day:        0,
+				Video:      "https://www.youtube.com/watch?v=eZyLSHyUGBY",
+				Rank:       712,
+				VoteUp:     84,
+				VotePig:    18,
+				VoteDown:   5,
+				Demozoo:    11,
+				Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg",
+				Groups:     []ResponseGroup{{ID: 1, Name: "The Black Lotus", Disambiguation: ""}},
+			},
+		}, prods)
+	})
+
+	t.Run("ProdSearchFuzzyMatch", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=astral", http.StatusOK)
+		t.Logf("Prod search response for 'astral' (lowercase): %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{
+			{
+				ID:         uint(1),
+				Name:       "Astral Blur",
+				Year:       1997,
+				Month:      3,
+				Day:        0,
+				Video:      "https://www.youtube.com/watch?v=eZyLSHyUGBY",
+				Rank:       712,
+				VoteUp:     84,
+				VotePig:    18,
+				VoteDown:   5,
+				Demozoo:    11,
+				Screenshot: "http://content.pouet.net/files/screenshots/00000/00000001.jpg",
+				Groups:     []ResponseGroup{{ID: 1, Name: "The Black Lotus", Disambiguation: ""}},
+			},
+		}, prods)
+	})
+
+	t.Run("ProdSearchFullGroupName", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=Stash", http.StatusOK)
+		t.Logf("Prod search response for 'Stash': %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{
+			{
+				ID:         uint(3),
+				Name:       "Stash",
+				Year:       1997,
+				Month:      12,
+				Day:        0,
+				Video:      "https://www.youtube.com/watch?v=UjiY-TM_3Ns",
+				Rank:       209,
+				VoteUp:     160,
+				VotePig:    25,
+				VoteDown:   4,
+				Demozoo:    13,
+				Screenshot: "http://content.pouet.net/files/screenshots/00000/00000003.jpg",
+				Groups:     []ResponseGroup{{ID: 1, Name: "The Black Lotus", Disambiguation: ""}},
+			},
+		}, prods)
+	})
+
+	t.Run("ProdSearchNoResults", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=nonexistentprod12345", http.StatusOK)
+		t.Logf("Prod search response for non-existent prod: %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{}, prods)
+	})
+
+	t.Run("ProdSearchEmptyName", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=", http.StatusOK)
+		t.Logf("Prod search with empty name: %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{}, prods)
+	})
+
+	t.Run("ProdSearchInvalidFTS", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=*invalid*", http.StatusOK)
+		t.Logf("Prod search with invalid FTS query: %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{}, prods)
+	})
+
+	t.Run("ProdSearchShortSequence", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=7", http.StatusOK)
+		t.Logf("Prod search response for '7' (short sequence): %v", prods)
+
+		assert.NotEmpty(t, prods)
+		assert.GreaterOrEqual(t, len(prods), 1)
+	})
+
+	t.Run("ProdSearchMultipleGroups", func(t *testing.T) {
+		prods := makeRequest[[]ProdSearchResponse](t, server.URL+"/v1/prods/search?name=Assembly", http.StatusOK)
+		t.Logf("Prod search response for 'Assembly': %v", prods)
+
+		assert.Equal(t, []ProdSearchResponse{
+			{
+				ID:         uint(4),
+				Name:       "Assembly 98 Invitation",
+				Year:       1998,
+				Month:      7,
+				Day:        0,
+				Video:      "http://www.youtube.com/watch?v=wKl6iVKCGjU",
+				Rank:       5719,
+				VoteUp:     17,
+				VotePig:    9,
+				VoteDown:   0,
+				Demozoo:    14,
+				Screenshot: "http://content.pouet.net/files/screenshots/00000/00000004.gif",
+				Groups:     []ResponseGroup{{ID: 1, Name: "The Black Lotus", Disambiguation: ""}},
+			},
+			{
+				ID:         uint(53508),
+				Name:       "Assembly 2009 invitation",
+				Year:       2009,
+				Month:      7,
+				Day:        0,
+				Video:      "http://www.youtube.com/watch?v=9SSFAXe5Rho",
+				Rank:       241,
+				VoteUp:     169,
+				VotePig:    37,
+				VoteDown:   8,
+				Demozoo:    1709,
+				Screenshot: "http://content.pouet.net/files/screenshots/00053/00053508.jpg",
+				Groups: []ResponseGroup{
+					{ID: 196, Name: "Andromeda", Disambiguation: ""},
+					{ID: 1360, Name: "Excess", Disambiguation: "pc"},
+					{ID: 138, Name: "NoooN", Disambiguation: ""},
+				},
+			},
+		}, prods)
 	})
 }
 
