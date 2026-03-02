@@ -602,4 +602,83 @@ func TestGreets(t *testing.T) {
 		deleteResp := makeDeleteRequest[DeleteGreetResponse](t, server.URL+"/v1/greets/abc", http.StatusBadRequest)
 		assert.Equal(t, DeleteGreetResponse{}, deleteResp)
 	})
+
+	t.Run("GetMostGreetedGroups", func(t *testing.T) {
+		t.Run("WithMultipleGroups", func(t *testing.T) {
+			prod1 := uint(22)
+			prod2 := uint(31)
+			prod3 := uint(403)
+			prod4 := uint(404)
+			prod5 := uint(3453)
+			prod6 := uint(3614)
+			group1 := uint(44)
+			group2 := uint(443)
+			group3 := uint(457)
+
+			createReq1 := CreateGreetRequest{
+				ProdId:  prod1,
+				GroupId: group1,
+				Note:    "Greet 1",
+			}
+			createReq2 := CreateGreetRequest{
+				ProdId:  prod2,
+				GroupId: group1,
+				Note:    "Greet 2",
+			}
+			createReq3 := CreateGreetRequest{
+				ProdId:  prod3,
+				GroupId: group1,
+				Note:    "Greet 3",
+			}
+			createReq4 := CreateGreetRequest{
+				ProdId:  prod4,
+				GroupId: group2,
+				Note:    "Greet A",
+			}
+			createReq5 := CreateGreetRequest{
+				ProdId:  prod5,
+				GroupId: group2,
+				Note:    "Greet B",
+			}
+			createReq6 := CreateGreetRequest{
+				ProdId:  prod6,
+				GroupId: group3,
+				Note:    "Greet X",
+			}
+
+			makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq1, http.StatusOK)
+			makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq2, http.StatusOK)
+			makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq3, http.StatusOK)
+			makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq4, http.StatusOK)
+			makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq5, http.StatusOK)
+			makeRequestWithBody[CreateGreetResponse](t, server.URL+"/v1/greets", http.MethodPost, createReq6, http.StatusOK)
+
+			groupsGreeted := makeRequest[[]GroupGreetedResponse](t, server.URL+"/v1/groups/greeted?limit=10", http.StatusOK)
+
+			assert.Equal(t, []GroupGreetedResponse{
+				{GroupID: 44, GroupName: "Fairlight", Count: 3},
+				{GroupID: 1, GroupName: "The Black Lotus", Count: 2},
+				{GroupID: 443, GroupName: "Mainloop", Count: 2},
+				{GroupID: 457, GroupName: "Majic 12", Count: 1},
+			}, groupsGreeted)
+		})
+
+		t.Run("WithLimit", func(t *testing.T) {
+			groupsGreeted := makeRequest[[]GroupGreetedResponse](t, server.URL+"/v1/groups/greeted?limit=2", http.StatusOK)
+			assert.Equal(t, []GroupGreetedResponse{
+				{GroupID: 44, GroupName: "Fairlight", Count: 3},
+				{GroupID: 1, GroupName: "The Black Lotus", Count: 2},
+			}, groupsGreeted)
+		})
+
+		t.Run("WithHighLimit", func(t *testing.T) {
+			groupsGreeted := makeRequest[[]GroupGreetedResponse](t, server.URL+"/v1/groups/greeted?limit=100", http.StatusOK)
+			assert.Equal(t, []GroupGreetedResponse{
+				{GroupID: 44, GroupName: "Fairlight", Count: 3},
+				{GroupID: 1, GroupName: "The Black Lotus", Count: 2},
+				{GroupID: 443, GroupName: "Mainloop", Count: 2},
+				{GroupID: 457, GroupName: "Majic 12", Count: 1},
+			}, groupsGreeted)
+		})
+	})
 }
