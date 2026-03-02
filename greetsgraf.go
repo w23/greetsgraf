@@ -8,6 +8,7 @@ import (
 
 type Args struct {
 	db           string
+	pouetdb      string
 	create       bool
 	pouet_prods  string
 	pouet_groups string
@@ -20,6 +21,7 @@ type Args struct {
 
 func parseArgs() (args Args) {
 	flag.StringVar(&args.db, "db", "greets.db", "Sqlite3 database filename")
+	flag.StringVar(&args.pouetdb, "pouetdb", "pouet.db", "Pouet database filename")
 	flag.BoolVar(&args.create, "create", false, "Create a new database from pouet dumps")
 	flag.StringVar(&args.pouet_prods, "prods", "", "pouetdatadump-prods .json.gz file taken from https://data.pouet.net/")
 	flag.StringVar(&args.pouet_groups, "groups", "", "pouetdatadump-groups .json.gz file taken from https://data.pouet.net/")
@@ -34,6 +36,7 @@ func parseArgs() (args Args) {
 
 type SetupArgs struct {
 	DBFile      string
+	PouetDBFile string
 	Create      bool
 	PouetProds  string
 	PouetGroups string
@@ -41,7 +44,7 @@ type SetupArgs struct {
 }
 
 func SetupDatabase(args SetupArgs) (Database, error) {
-	db, err := DatabaseOpen(args.DBFile)
+	db, err := DatabaseOpen(args.DBFile, args.PouetDBFile)
 	if err != nil {
 		return Database{}, err
 	}
@@ -67,6 +70,7 @@ func main() {
 
 	db, err := SetupDatabase(SetupArgs{
 		DBFile:      args.db,
+		PouetDBFile: args.pouetdb,
 		Create:      args.create,
 		PouetProds:  args.pouet_prods,
 		PouetGroups: args.pouet_groups,

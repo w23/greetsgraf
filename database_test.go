@@ -13,6 +13,7 @@ func setupTestDatabaseWithPouetData(t *testing.T) Database {
 
 	db, err := SetupDatabase(SetupArgs{
 		DBFile:      fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name()),
+		PouetDBFile: fmt.Sprintf("file:%s_pouet?mode=memory&cache=shared", t.Name()),
 		Create:      true,
 		PouetProds:  "test/pouet-prods.json.gz",
 		PouetGroups: "test/pouet-groups.json.gz",

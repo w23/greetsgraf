@@ -125,7 +125,7 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		Screenshot: prod.Screenshot,
 	}
 
-	for i, _ := range prod.Groups {
+	for i := range prod.Groups {
 		group := &prod.Groups[i]
 		response_prod.Groups = append(response_prod.Groups, ResponseGroup{
 			ID:             group.ID,
@@ -134,8 +134,12 @@ func (c *Database) prodGet(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	for i, _ := range prod.Greets {
-		greet := &prod.Greets[i]
+	prodsGreets, err := c.GetProdGreets(prodID)
+	if err != nil {
+		log.Println(err)
+	}
+
+	for _, greet := range prodsGreets {
 		group, err := c.GetGroup(greet.GreeteeID)
 		if err != nil {
 			log.Println(err)
@@ -296,7 +300,6 @@ func Server(db Database, serve_static string) http.Handler {
 			r.Get("/greeted", db.groupsGreeted)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Use(GroupContext)
-				//r.Get("/", db.groupGet)
 				r.Get("/greets", db.groupGetGreeted)
 			})
 		})
@@ -312,8 +315,6 @@ func Server(db Database, serve_static string) http.Handler {
 		r.Route("/greets", func(r chi.Router) {
 			r.Post("/", db.greetsCreate)
 			r.Route("/{id}", func(r chi.Router) {
-				//r.Get("", db.greetsGet)
-				//r.Patch("", db.greetsUpdate)
 				r.Delete("/", db.greetsDelete)
 			})
 		})
